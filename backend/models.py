@@ -152,3 +152,4 @@ class Move(db.Model):
             "target": [self.target_row, self.target_col],
             "timestamp": self.timestamp,
         }
+

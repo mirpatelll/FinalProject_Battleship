@@ -4,6 +4,7 @@ from config import Config
 from database import init_db
 from routes.games import games_bp
 from routes.players import players_bp
+from routes.system import system_bp
 
 
 def create_app(config_class=Config):
@@ -14,9 +15,10 @@ def create_app(config_class=Config):
     # Initialize database and create tables
     init_db(app)
 
-    # Register blueprints
-    app.register_blueprint(games_bp)
-    app.register_blueprint(players_bp)
+    # Register blueprints with /api prefix
+    app.register_blueprint(games_bp, url_prefix="/api")
+    app.register_blueprint(players_bp, url_prefix="/api")
+    app.register_blueprint(system_bp, url_prefix="/api")
 
     return app
 
