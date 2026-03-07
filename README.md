@@ -114,5 +114,5 @@ Server runs at `http://localhost:5000`.
 - Claude (Anthropic) — Architecture design, code generation, test planning
 
 ## Team Members
-- [Name 1] — [Role]
-- [Name 2] — [Role]
+- [Name 1] — St Angelo Davis - Frontend Implementation
+- [Name 2] — Mir Patel - Backend Implementation
