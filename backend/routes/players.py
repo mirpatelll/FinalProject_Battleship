@@ -53,6 +53,7 @@ def create_player():
 
 
 @players_bp.route("/players/<player_id>", methods=["GET"])
+@players_bp.route("/players/<player_id>/stats", methods=["GET"])
 def get_player(player_id):
     """Get a player's lifetime statistics."""
     player = Player.query.get(player_id)
