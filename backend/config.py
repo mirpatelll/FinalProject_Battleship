@@ -10,8 +10,8 @@ class Config:
 
     # Game defaults
     DEFAULT_GRID_SIZE = 6
-    MIN_GRID_SIZE = 4
-    MAX_GRID_SIZE = 20
+    MIN_GRID_SIZE = 5
+    MAX_GRID_SIZE = 15
     MIN_PLAYERS_TO_START = 2
 
     # Test mode
