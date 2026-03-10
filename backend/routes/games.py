@@ -202,6 +202,72 @@ def start_game(game_id):
     return jsonify(payload), 200
 
 
+@games_bp.route("/games/<int:game_id>/place", methods=["POST"])
+def place_cells(game_id):
+    """Place starting cells for a player."""
+    data = request.get_json(silent=True) or {}
+
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({"error": "Game not found"}), 404
+
+    player_id = data.get("playerId") or data.get("player_id")
+    if not player_id:
+        return jsonify({"error": "playerId is required"}), 400
+
+    player = Player.query.get(player_id)
+    if not player:
+        return jsonify({"error": "Invalid playerId"}), 403
+
+    game_player = GamePlayer.query.filter_by(
+        gameId=game_id, playerId=player_id
+    ).first()
+    if not game_player:
+        return jsonify({"error": "Player is not in this game"}), 403
+
+    ships = data.get("ships") or data.get("cells") or []
+    if not ships:
+        return jsonify({"error": "ships array is required"}), 400
+
+    placed = []
+    for ship in ships:
+        row = ship.get("row", ship.get("r"))
+        col = ship.get("col", ship.get("c"))
+
+        if row is None or col is None:
+            return jsonify({"error": "Each ship needs row and col"}), 400
+
+        if not (0 <= row < game.grid_size and 0 <= col < game.grid_size):
+            return jsonify({"error": f"Position ({row},{col}) is out of bounds"}), 400
+
+        cell = BoardCell.query.filter_by(
+            game_id=game_id, row=row, col=col
+        ).first()
+
+        if cell:
+            cell.owner_player_id = player_id
+        else:
+            cell = BoardCell(
+                game_id=game_id, row=row, col=col,
+                owner_player_id=player_id,
+            )
+            db.session.add(cell)
+
+        placed.append({"row": row, "col": col})
+
+    db.session.commit()
+
+    return jsonify({
+        "status": "placed",
+        "game_id": game_id,
+        "gameId": game_id,
+        "player_id": player_id,
+        "playerId": player_id,
+        "ships": placed,
+        "cells": placed,
+    }), 200
+
+
 @games_bp.route("/games/<int:game_id>/move", methods=["POST"])
 def make_move(game_id):
     """Make a move in the game."""
