@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
@@ -9,7 +10,7 @@ class Player(db.Model):
     """Persistent player accounts with lifetime stats."""
     __tablename__ = "players"
 
-    playerId = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    playerId = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     displayName = db.Column(db.String(80), unique=True, nullable=False)
     createdAt = db.Column(
         db.String(30),
@@ -42,8 +43,8 @@ class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     grid_size = db.Column(db.Integer, nullable=False, default=6)
     status = db.Column(db.String(20), nullable=False, default="waiting")
-    current_turn_player_id = db.Column(db.Integer, db.ForeignKey("players.playerId"), nullable=True)
-    winner_id = db.Column(db.Integer, db.ForeignKey("players.playerId"), nullable=True)
+    current_turn_player_id = db.Column(db.String(36), db.ForeignKey("players.playerId"), nullable=True)
+    winner_id = db.Column(db.String(36), db.ForeignKey("players.playerId"), nullable=True)
     created_at = db.Column(
         db.String(30),
         nullable=False,
@@ -72,9 +73,10 @@ class GamePlayer(db.Model):
     __tablename__ = "game_players"
 
     gameId = db.Column(db.Integer, db.ForeignKey("games.id"), primary_key=True)
-    playerId = db.Column(db.Integer, db.ForeignKey("players.playerId"), primary_key=True)
+    playerId = db.Column(db.String(36), db.ForeignKey("players.playerId"), primary_key=True)
     turn_order = db.Column(db.Integer, nullable=False)
     is_eliminated = db.Column(db.Boolean, nullable=False, default=False)
+    ships_placed = db.Column(db.Boolean, nullable=False, default=False)
 
     game = db.relationship("Game", back_populates="game_players")
     player = db.relationship("Player", back_populates="game_players")
@@ -85,6 +87,32 @@ class GamePlayer(db.Model):
             "playerId": self.playerId,
             "turn_order": self.turn_order,
             "is_eliminated": self.is_eliminated,
+            "ships_placed": self.ships_placed,
+        }
+
+
+class Ship(db.Model):
+    """Individual ships placed by players (3 per player per game)."""
+    __tablename__ = "ships"
+
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=False)
+    player_id = db.Column(db.String(36), db.ForeignKey("players.playerId"), nullable=False)
+    row = db.Column(db.Integer, nullable=False)
+    col = db.Column(db.Integer, nullable=False)
+    is_sunk = db.Column(db.Boolean, nullable=False, default=False)
+
+    game = db.relationship("Game")
+    player = db.relationship("Player")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "game_id": self.game_id,
+            "player_id": self.player_id,
+            "row": self.row,
+            "col": self.col,
+            "is_sunk": self.is_sunk,
         }
 
 
@@ -97,7 +125,7 @@ class BoardCell(db.Model):
     game_id = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=False)
     row = db.Column(db.Integer, nullable=False)
     col = db.Column(db.Integer, nullable=False)
-    owner_player_id = db.Column(db.Integer, db.ForeignKey("players.playerId"), nullable=True)
+    owner_player_id = db.Column(db.String(36), db.ForeignKey("players.playerId"), nullable=True)
 
     game = db.relationship("Game", back_populates="board_cells")
     owner = db.relationship("Player", foreign_keys=[owner_player_id])
@@ -118,7 +146,7 @@ class Move(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=False)
-    player_id = db.Column(db.Integer, db.ForeignKey("players.playerId"), nullable=False)
+    player_id = db.Column(db.String(36), db.ForeignKey("players.playerId"), nullable=False)
     source_row = db.Column(db.Integer, nullable=False)
     source_col = db.Column(db.Integer, nullable=False)
     target_row = db.Column(db.Integer, nullable=False)

@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, current_app
 
-from models import BoardCell, Game, GamePlayer, Move, Player, db
+from models import BoardCell, Game, GamePlayer, Move, Player, Ship, db
 from game_logic import get_board_as_2d_array
 
 system_bp = Blueprint("system", __name__)
@@ -14,34 +14,39 @@ def reset():
     return jsonify({"status": "reset"}), 200
 
 
-def check_test_mode():
-    """Check if test mode is enabled. In tests, it always is."""
-    # In test environment (TestConfig), TEST_MODE is True
-    # The autograder doesn't send X-Test-Mode header; it just relies on config
-    if not current_app.config.get("TEST_MODE", False):
-        return False, (jsonify({"error": "Test mode is not enabled"}), 403)
-    return True, None
+def check_test_mode_header():
+    """Verify X-Test-Mode header matches password."""
+    test_password = current_app.config.get("TEST_PASSWORD")
+    header_password = request.headers.get("X-Test-Mode")
+    
+    if not header_password or header_password != test_password:
+        return False
+    return True
 
 
 @system_bp.route("/test/games/<int:game_id>/restart", methods=["POST"])
 def restart_game(game_id):
     """Reset a game: clear board, clear moves, status back to waiting.
-    Player statistics remain unchanged.
+    Player statistics remain unchanged (transactional).
+    Requires X-Test-Mode header.
     """
-    allowed, error = check_test_mode()
-    if not allowed:
-        return error
+    if not check_test_mode_header():
+        return jsonify({"error": "Unauthorized"}), 403
 
     game = Game.query.get(game_id)
     if not game:
         return jsonify({"error": "Game not found"}), 404
 
+    # Clear board state and moves
     BoardCell.query.filter_by(game_id=game_id).delete()
     Move.query.filter_by(game_id=game_id).delete()
+    Ship.query.filter_by(game_id=game_id).delete()
 
+    # Reset game players
     game_players = GamePlayer.query.filter_by(gameId=game_id).all()
     for gp in game_players:
         gp.is_eliminated = False
+        gp.ships_placed = False
 
     game.status = "waiting"
     game.current_turn_player_id = None
@@ -57,15 +62,14 @@ def restart_game(game_id):
 
 
 @system_bp.route("/test/games/<int:game_id>/ships", methods=["POST"])
-def test_place_starting_cells(game_id):
-    """Deterministic starting cell placement for testing.
+def test_place_ships(game_id):
+    """Deterministic ship placement for testing.
+    Requires X-Test-Mode header.
     
-    Test endpoint to allow grader to place ships in exact coordinates.
-    Accepts: { "playerId": <id>, "ships": [ {"row": r, "col": c}, ... ] }
+    Request: { "playerId": <uuid>, "ships": [ {"row": r, "col": c}, ... ] }
     """
-    allowed, error = check_test_mode()
-    if not allowed:
-        return error
+    if not check_test_mode_header():
+        return jsonify({"error": "Unauthorized"}), 403
 
     data = request.get_json(silent=True) or {}
 
@@ -73,12 +77,10 @@ def test_place_starting_cells(game_id):
     if not game:
         return jsonify({"error": "Game not found"}), 404
 
-    # Accept playerId or player_id
     player_id = data.get("playerId") or data.get("player_id")
     if not player_id:
         return jsonify({"error": "playerId is required"}), 400
 
-    # Verify player exists and is in this game
     player = Player.query.get(player_id)
     if not player:
         return jsonify({"error": "Invalid playerId"}), 400
@@ -89,51 +91,34 @@ def test_place_starting_cells(game_id):
     if not game_player:
         return jsonify({"error": "Player is not in this game"}), 400
 
-    # Get ships array (accept "ships" or "cells")
     ships = data.get("ships") or data.get("cells") or []
     if not ships:
         return jsonify({"error": "ships array is required"}), 400
 
     placed_cells = []
 
-    # Place each ship
     for ship in ships:
         row = ship.get("row")
         col = ship.get("col")
 
-        # Accept alternate field names
-        if row is None:
-            row = ship.get("r")
-        if col is None:
-            col = ship.get("c")
-
         if row is None or col is None:
             return jsonify({"error": "Each ship needs row and col"}), 400
 
-        # Validate bounds
         if not (0 <= row < game.grid_size and 0 <= col < game.grid_size):
             return jsonify({
                 "error": f"Position ({row},{col}) is out of bounds for grid size {game.grid_size}"
             }), 400
 
-        # Create or update cell
-        cell = BoardCell.query.filter_by(
-            game_id=game_id, row=row, col=col
-        ).first()
-
-        if cell:
-            cell.owner_player_id = player_id
-        else:
-            cell = BoardCell(
-                game_id=game_id,
-                row=row,
-                col=col,
-                owner_player_id=player_id,
-            )
-            db.session.add(cell)
-
+        ship_obj = Ship(
+            game_id=game_id,
+            player_id=player_id,
+            row=row,
+            col=col,
+        )
+        db.session.add(ship_obj)
         placed_cells.append({"row": row, "col": col})
 
+    game_player.ships_placed = True
     db.session.commit()
 
     return jsonify({
@@ -149,20 +134,15 @@ def test_place_starting_cells(game_id):
 
 @system_bp.route("/test/games/<int:game_id>/board/<player_id>", methods=["GET"])
 def test_get_board(game_id, player_id):
-    """Reveal board state for a specific player (test mode only)."""
-    allowed, error = check_test_mode()
-    if not allowed:
-        return error
+    """Reveal board state for a specific player (test mode only).
+    Requires X-Test-Mode header.
+    """
+    if not check_test_mode_header():
+        return jsonify({"error": "Unauthorized"}), 403
 
     game = Game.query.get(game_id)
     if not game:
         return jsonify({"error": "Game not found"}), 404
-
-    # player_id might come as string, convert to int
-    try:
-        player_id = int(player_id)
-    except (ValueError, TypeError):
-        return jsonify({"error": "Invalid player_id"}), 400
 
     player = Player.query.get(player_id)
     if not player:

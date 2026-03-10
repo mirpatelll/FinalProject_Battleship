@@ -4,13 +4,13 @@ import os
 class Config:
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
     SQLALCHEMY_DATABASE_URI = os.environ.get(
-        "DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'virus_outbreak.db')}"
+        "DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'battleship.db')}"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Game defaults
     DEFAULT_GRID_SIZE = 6
-    MIN_GRID_SIZE = 5
+    MIN_GRID_SIZE = 4  # Allow 4x4 grids for testing
     MAX_GRID_SIZE = 15
     MIN_PLAYERS_TO_START = 2
 
@@ -23,4 +23,4 @@ class TestConfig(Config):
     """Uses in-memory SQLite for testing. Test mode ENABLED."""
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     TESTING = True
-    TEST_MODE = True  # IMPORTANT: Enable test endpoints in test environment
+    TEST_MODE = True  # Enable test endpoints in test environment

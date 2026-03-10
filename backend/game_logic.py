@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from models import BoardCell, GamePlayer, Move, Player, db
+from models import BoardCell, GamePlayer, Move, Player, Ship, db
 
 
 def get_starting_positions(grid_size, num_players):
@@ -50,21 +50,31 @@ def create_board(game):
 
 
 def assign_starting_cells(game, game_players):
-    """Assign one starting cell to each player. Returns list of positions."""
+    """Assign one starting cell to each player. Returns list of (player_id, row, col)."""
     positions = get_starting_positions(game.grid_size, len(game_players))
 
+    result = []
     for gp, (row, col) in zip(game_players, positions):
+        # Query or create the cell at this position
         cell = BoardCell.query.filter_by(
             game_id=game.id, row=row, col=col
         ).first()
+        
+        if not cell:
+            # This shouldn't happen if create_board was called, but handle it
+            cell = BoardCell(game_id=game.id, row=row, col=col)
+            db.session.add(cell)
+        
+        # Assign ownership to this player
         cell.owner_player_id = gp.playerId
+        result.append((gp.playerId, row, col))
 
-    return positions
+    return result
 
 
 def validate_move(game, player_id, source_row, source_col, target_row, target_col):
-    """Validate a move and return (is_valid, error_message).
-
+    """Validate a territorial control move.
+    
     Rules:
     1. Game must be active.
     2. It must be this player's turn.
@@ -113,15 +123,24 @@ def validate_move(game, player_id, source_row, source_col, target_row, target_co
 
 
 def execute_move(game, player_id, source_row, source_col, target_row, target_col):
-    """Execute a validated move. Returns move result dict."""
+    """Execute a validated territorial control move."""
     # Get target cell and record who owned it before
     target_cell = BoardCell.query.filter_by(
         game_id=game.id, row=target_row, col=target_col
     ).first()
-    captured_from = target_cell.owner_player_id
+    captured_from = target_cell.owner_player_id if target_cell else None
 
     # Transfer ownership
-    target_cell.owner_player_id = player_id
+    if target_cell:
+        target_cell.owner_player_id = player_id
+    else:
+        target_cell = BoardCell(
+            game_id=game.id,
+            row=target_row,
+            col=target_col,
+            owner_player_id=player_id,
+        )
+        db.session.add(target_cell)
 
     # Log the move with timestamp
     move = Move(
@@ -166,7 +185,7 @@ def execute_move(game, player_id, source_row, source_col, target_row, target_col
 
 
 def check_eliminations(game, current_player_id):
-    """Check if any opponents have 0 cells remaining. Returns list of eliminated player IDs."""
+    """Check if any opponents have 0 cells remaining."""
     eliminated = []
     game_players = GamePlayer.query.filter_by(gameId=game.id).all()
 
@@ -213,7 +232,7 @@ def check_winner(game):
 
 
 def advance_turn(game):
-    """Advance to the next non-eliminated player. Returns their ID."""
+    """Advance to the next non-eliminated player."""
     active_players = (
         GamePlayer.query.filter_by(gameId=game.id, is_eliminated=False)
         .order_by(GamePlayer.turn_order)
@@ -249,3 +268,47 @@ def get_board_as_2d_array(game):
         board[cell.row][cell.col] = cell.owner_player_id
 
     return board
+
+
+def validate_ship_placement(game, player_id, ships):
+    """Validate ship placement for a player.
+    
+    Rules:
+    - Exactly 3 ships
+    - Each ship at valid coordinates
+    - No overlapping ships for this player
+    - Within grid bounds
+    """
+    if not isinstance(ships, list):
+        return False, "ships must be a list"
+
+    if len(ships) != 3:
+        return False, f"Must place exactly 3 ships, got {len(ships)}"
+
+    # Check if player already placed ships
+    existing_ships = Ship.query.filter_by(
+        game_id=game.id, player_id=player_id
+    ).all()
+    if existing_ships:
+        return False, "Ships already placed for this player"
+
+    positions = set()
+    for i, ship in enumerate(ships):
+        row = ship.get("row")
+        col = ship.get("col")
+
+        if row is None or col is None:
+            return False, f"Ship {i} missing row or col"
+
+        if not isinstance(row, int) or not isinstance(col, int):
+            return False, f"Ship {i} row and col must be integers"
+
+        if not (0 <= row < game.grid_size and 0 <= col < game.grid_size):
+            return False, f"Ship {i} at ({row},{col}) is out of bounds"
+
+        if (row, col) in positions:
+            return False, f"Duplicate ship position ({row},{col})"
+
+        positions.add((row, col))
+
+    return True, None

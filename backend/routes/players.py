@@ -10,9 +10,6 @@ def build_player_payload(player):
     total_wins = getattr(player, "totalWins", 0)
     total_losses = getattr(player, "totalLosses", 0)
     total_moves = getattr(player, "totalMoves", 0)
-    total_hits = getattr(player, "totalHits", 0)
-
-    accuracy = 0 if total_moves == 0 else total_hits / total_moves
 
     return {
         "playerId": player.playerId,
@@ -30,16 +27,17 @@ def build_player_payload(player):
         "wins": total_wins,
         "losses": total_losses,
         "total_shots": total_moves,
-        "total_hits": total_hits,
-        "accuracy": accuracy,
+        "total_hits": 0,
+        "accuracy": 0.0,
     }
 
 
 @players_bp.route("/players", methods=["POST"])
 def create_player():
-    """Create a new player."""
+    """Create a new player. Server generates playerId (UUID)."""
     data = request.get_json(silent=True) or {}
 
+    # Reject if client supplies playerId
     if "playerId" in data or "id" in data or "player_id" in data:
         return jsonify({"error": "Client may not supply playerId"}), 400
 
@@ -67,8 +65,8 @@ def create_player():
     return jsonify(build_player_payload(player)), 201
 
 
-@players_bp.route("/players/<int:player_id>", methods=["GET"])
-@players_bp.route("/players/<int:player_id>/stats", methods=["GET"])
+@players_bp.route("/players/<player_id>", methods=["GET"])
+@players_bp.route("/players/<player_id>/stats", methods=["GET"])
 def get_player(player_id):
     """Get a player's lifetime statistics."""
     player = Player.query.get(player_id)

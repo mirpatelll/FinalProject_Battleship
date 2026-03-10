@@ -1,46 +1,28 @@
 from flask import Blueprint, jsonify, request
 
 from config import Config
-from models import BoardCell, Game, GamePlayer, Move, Player, db
+from models import BoardCell, Game, GamePlayer, Move, Player, Ship, db
 from game_logic import (
+    advance_turn,
     assign_starting_cells,
+    check_eliminations,
+    check_winner,
     create_board,
     execute_move,
     get_board_as_2d_array,
     validate_move,
+    validate_ship_placement,
 )
 
 games_bp = Blueprint("games", __name__)
 
 
-def add_game_aliases(payload):
-    """Add snake_case / camelCase compatibility aliases for game payloads."""
-    if "id" in payload and "game_id" not in payload:
-        payload["game_id"] = payload["id"]
-    if "id" in payload and "gameId" not in payload:
-        payload["gameId"] = payload["id"]
-    return payload
-
-
-def add_player_aliases(payload):
-    """Add snake_case / camelCase compatibility aliases for player payloads."""
-    if "playerId" in payload and "player_id" not in payload:
-        payload["player_id"] = payload["playerId"]
-    if "displayName" in payload and "username" not in payload:
-        payload["username"] = payload["displayName"]
-    if "displayName" in payload and "name" not in payload:
-        payload["name"] = payload["displayName"]
-    return payload
-
-
 @games_bp.route("/games", methods=["POST"])
 def create_game():
-    """Create a new game. Creator may optionally auto-join."""
+    """Create a new game."""
     data = request.get_json(silent=True) or {}
 
-    grid_size = data.get("grid_size")
-    if grid_size is None:
-        grid_size = data.get("gridSize", Config.DEFAULT_GRID_SIZE)
+    grid_size = data.get("grid_size") or data.get("gridSize") or Config.DEFAULT_GRID_SIZE
 
     if not isinstance(grid_size, int) or grid_size < Config.MIN_GRID_SIZE or grid_size > Config.MAX_GRID_SIZE:
         return jsonify({
@@ -52,8 +34,6 @@ def create_game():
         or data.get("creatorId")
         or data.get("player_id")
         or data.get("playerId")
-        or data.get("host_player_id")
-        or data.get("hostPlayerId")
     )
 
     if creator_id:
@@ -76,7 +56,6 @@ def create_game():
     db.session.commit()
 
     payload = game.to_dict()
-    payload = add_game_aliases(payload)
     return jsonify(payload), 201
 
 
@@ -126,11 +105,11 @@ def join_game(game_id):
         return jsonify({"error": "Player already joined this game"}), 400
 
     current_count = GamePlayer.query.filter_by(gameId=game_id).count()
-    max_players = (game.grid_size * game.grid_size) // 4
-    if current_count >= max_players:
-        return jsonify({"error": f"Game is full (max {max_players} players)"}), 400
-
-    turn_order = current_count
+    
+    # If this is the first player joining an empty game, start at turn_order=1
+    # (turn_order=0 is reserved for the implicit creator or system player)
+    # For subsequent players, increment normally
+    turn_order = max(1, current_count + 1) if current_count == 0 else current_count + 1
 
     game_player = GamePlayer(
         gameId=game_id,
@@ -147,7 +126,6 @@ def join_game(game_id):
     result["player_id"] = player.playerId
     result["playerId"] = player.playerId
     result["username"] = player.displayName
-    result["name"] = player.displayName
     return jsonify(result), 200
 
 
@@ -181,18 +159,16 @@ def start_game(game_id):
     db.session.commit()
 
     players_info = []
-    for gp, pos in zip(game_players, positions):
+    for gp, (_, row, col) in zip(game_players, positions):
         player_payload = {
             "playerId": gp.playerId,
-            "player_id": gp.playerId,
             "turn_order": gp.turn_order,
-            "starting_cell": list(pos),
+            "starting_cell": [row, col],
         }
         players_info.append(player_payload)
 
     payload = {
         "id": game.id,
-        "game_id": game.id,
         "gameId": game.id,
         "status": game.status,
         "grid_size": game.grid_size,
@@ -203,8 +179,8 @@ def start_game(game_id):
 
 
 @games_bp.route("/games/<int:game_id>/place", methods=["POST"])
-def place_cells(game_id):
-    """Place starting cells for a player."""
+def place_ships(game_id):
+    """Place ships (3 per player, 1 cell each)."""
     data = request.get_json(silent=True) or {}
 
     game = Game.query.get(game_id)
@@ -225,36 +201,27 @@ def place_cells(game_id):
     if not game_player:
         return jsonify({"error": "Player is not in this game"}), 403
 
-    ships = data.get("ships") or data.get("cells") or []
-    if not ships:
-        return jsonify({"error": "ships array is required"}), 400
+    ships = data.get("ships") or []
+
+    is_valid, error_msg = validate_ship_placement(game, player_id, ships)
+    if not is_valid:
+        return jsonify({"error": error_msg}), 400
 
     placed = []
     for ship in ships:
-        row = ship.get("row", ship.get("r"))
-        col = ship.get("col", ship.get("c"))
+        row = ship.get("row")
+        col = ship.get("col")
 
-        if row is None or col is None:
-            return jsonify({"error": "Each ship needs row and col"}), 400
-
-        if not (0 <= row < game.grid_size and 0 <= col < game.grid_size):
-            return jsonify({"error": f"Position ({row},{col}) is out of bounds"}), 400
-
-        cell = BoardCell.query.filter_by(
-            game_id=game_id, row=row, col=col
-        ).first()
-
-        if cell:
-            cell.owner_player_id = player_id
-        else:
-            cell = BoardCell(
-                game_id=game_id, row=row, col=col,
-                owner_player_id=player_id,
-            )
-            db.session.add(cell)
-
+        ship_obj = Ship(
+            game_id=game_id,
+            player_id=player_id,
+            row=row,
+            col=col,
+        )
+        db.session.add(ship_obj)
         placed.append({"row": row, "col": col})
 
+    game_player.ships_placed = True
     db.session.commit()
 
     return jsonify({
@@ -264,22 +231,21 @@ def place_cells(game_id):
         "player_id": player_id,
         "playerId": player_id,
         "ships": placed,
-        "cells": placed,
     }), 200
 
 
 @games_bp.route("/games/<int:game_id>/move", methods=["POST"])
 def make_move(game_id):
-    """Make a move in the game."""
+    """Make a territorial control move (expand from owned cell)."""
     data = request.get_json(silent=True) or {}
     if not data:
         return jsonify({"error": "Request body is required"}), 400
 
-    player_id = data.get("playerId") or data.get("player_id")
-    source_row = data.get("source_row", data.get("sourceRow"))
-    source_col = data.get("source_col", data.get("sourceCol"))
-    target_row = data.get("target_row", data.get("targetRow"))
-    target_col = data.get("target_col", data.get("targetCol"))
+    player_id = data.get("playerId") if data.get("playerId") is not None else data.get("player_id")
+    source_row = data.get("source_row") if data.get("source_row") is not None else data.get("sourceRow")
+    source_col = data.get("source_col") if data.get("source_col") is not None else data.get("sourceCol")
+    target_row = data.get("target_row") if data.get("target_row") is not None else data.get("targetRow")
+    target_col = data.get("target_col") if data.get("target_col") is not None else data.get("targetCol")
 
     required_values = {
         "playerId": player_id,
@@ -310,23 +276,13 @@ def make_move(game_id):
         return jsonify({"error": "Game is not active"}), 403
 
     is_valid, error_msg = validate_move(
-        game,
-        player_id,
-        source_row,
-        source_col,
-        target_row,
-        target_col,
+        game, player_id, source_row, source_col, target_row, target_col
     )
     if not is_valid:
         return jsonify({"error": error_msg}), 403
 
     result = execute_move(
-        game,
-        player_id,
-        source_row,
-        source_col,
-        target_row,
-        target_col,
+        game, player_id, source_row, source_col, target_row, target_col
     )
     db.session.commit()
 
@@ -362,10 +318,7 @@ def get_game(game_id):
 
         player_payload = {
             "playerId": gp.playerId,
-            "player_id": gp.playerId,
             "displayName": player.displayName if player else None,
-            "username": player.displayName if player else None,
-            "name": player.displayName if player else None,
             "turn_order": gp.turn_order,
             "is_eliminated": gp.is_eliminated,
             "cell_count": cell_count,
@@ -381,7 +334,6 @@ def get_game(game_id):
 
     payload = {
         "id": game.id,
-        "game_id": game.id,
         "gameId": game.id,
         "grid_size": game.grid_size,
         "status": game.status,
@@ -404,15 +356,6 @@ def get_moves(game_id):
         return jsonify({"error": "Game not found"}), 404
 
     moves = Move.query.filter_by(game_id=game_id).order_by(Move.id).all()
-    move_payloads = []
-
-    for m in moves:
-        payload = m.to_dict()
-        if isinstance(payload, dict):
-            if "playerId" in payload and "player_id" not in payload:
-                payload["player_id"] = payload["playerId"]
-            payload.setdefault("game_id", game_id)
-            payload.setdefault("gameId", game_id)
-        move_payloads.append(payload)
+    move_payloads = [m.to_dict() for m in moves]
 
     return jsonify(move_payloads), 200
