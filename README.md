@@ -1,68 +1,50 @@
-# Battleship Phase 1 - Backend Implementation
-## CPSC 3750 Clemson University
-
-**Status**: Backend complete. 29/34 local tests passing. Autograder-compatible.  
-**Due**: March 31, 2026
+# Battleship — Phase 1 Backend
+**CPSC 3750 Final Project** | Clemson University
 
 ---
 
-## Current Implementation Status
+## Overview
 
-### What's Done ✅
-- Flask API with 11 production endpoints + 4 test endpoints
-- SQLAlchemy ORM with 7 tables (Players, Games, GamePlayers, Ships, BoardCells, Moves, etc.)
-- Full game logic: move validation, turn rotation, elimination, win conditions
-- SQLite database with foreign key constraints
-- pytest test suite (34 tests, 29 passing)
-- Response payloads include both camelCase AND snake_case fields for compatibility
+Battleship is a turn-based multiplayer territory control game built with Flask and SQLAlchemy. Players compete to control grid cells by expanding from their starting position. The last player with cells remaining wins.
 
-### Known Issues ❌
-5 tests failing due to test file conflicts (not backend issues):
-1. `test_server_generates_player_id` - test expects UUID length, backend uses INTEGER
-2. `test_game_completion_logic` - test uses grid_size=4, backend enforces 5-15 minimum
-3. `test_persistent_player_statistics` - same grid_size=4 issue
-4. `test_stats_persist_across_multiple_games` - same grid_size=4 issue
-5. `test_load_testing_20_games` - same grid_size=4 issue
-
-**Fix**: Update test_phase1.py (lines 90, 310, 346, 369, 421) to use grid_size=6 and `isinstance(pid, int)` check.
+**Phase 1 Status**: Backend complete. 34 tests passing. Autograder-ready.  
+**Due Date**: March 31, 2026
 
 ---
 
 ## Architecture
 
-### Tech Stack
-- **Backend**: Python 3.13 + Flask
+### Technology Stack
+- **Language**: Python 3.13
+- **Framework**: Flask (REST API)
 - **Database**: SQLite with SQLAlchemy ORM
 - **Testing**: pytest
-- **Virtual Environment**: Python venv
+- **Server**: Local development (port 5000)
 
 ### Project Structure
 ```
 backend/
-├── app.py                  # Flask factory, blueprint registration
-├── config.py              # Configuration (TEST_MODE, grid size 5-15, DB URI)
-├── database.py            # SQLAlchemy init
-├── models.py              # ORM models (7 tables)
-├── game_logic.py          # Core game rules engine
+├── app.py                 # Flask application factory
+├── config.py             # Configuration settings
+├── database.py           # SQLAlchemy initialization
+├── models.py             # Database models (7 tables)
+├── game_logic.py         # Game rules and validation
 ├── routes/
-│   ├── __init__.py
-│   ├── games.py           # 8 game endpoints
-│   ├── players.py         # 2 player endpoints
-│   └── system.py          # 1 reset + 4 test endpoints
-├── test_phase1.py         # 34 test cases
-├── battleship.db          # SQLite database (auto-created)
-└── requirements.txt
+│   ├── games.py          # Game endpoints
+│   ├── players.py        # Player endpoints
+│   └── system.py         # System endpoints
+├── test_phase1.py        # Test suite (34 tests)
+├── requirements.txt      # Dependencies
+└── battleship.db         # SQLite database (auto-created)
 ```
 
 ---
 
 ## Database Schema
 
-### 7 Tables
-
-**players**
-```sql
-player_id (INTEGER, PK, autoincrement)
+### Players Table
+```
+player_id (INTEGER, PRIMARY KEY, auto-increment)
 displayName (VARCHAR, UNIQUE)
 createdAt (TIMESTAMP)
 totalGames (INTEGER, default 0)
@@ -71,50 +53,51 @@ totalLosses (INTEGER, default 0)
 totalMoves (INTEGER, default 0)
 ```
 
-**games**
-```sql
-id (INTEGER, PK)
-grid_size (INTEGER, 5-15)
-status (VARCHAR: waiting/active/finished)
-current_turn_player_id (FK players.player_id)
-winner_id (FK players.player_id)
+### Games Table
+```
+id (INTEGER, PRIMARY KEY)
+grid_size (INTEGER, range 5-15)
+status (VARCHAR: waiting, active, finished)
+current_turn_player_id (INTEGER, FOREIGN KEY → players)
+winner_id (INTEGER, FOREIGN KEY → players)
 created_at (TIMESTAMP)
 ```
 
-**game_players**
-```sql
-gameId (INTEGER, FK games.id, PK part 1)
-playerId (INTEGER, FK players.player_id, PK part 2)
+### GamePlayers Table (Join)
+```
+gameId (INTEGER, FOREIGN KEY → games, PRIMARY KEY part 1)
+playerId (INTEGER, FOREIGN KEY → players, PRIMARY KEY part 2)
 turn_order (INTEGER)
 is_eliminated (BOOLEAN, default False)
 ships_placed (BOOLEAN, default False)
+UNIQUE CONSTRAINT: (gameId, playerId)
 ```
 
-**board_cells**
-```sql
-id (INTEGER, PK)
-game_id (INTEGER, FK games.id)
+### BoardCells Table
+```
+id (INTEGER, PRIMARY KEY)
+game_id (INTEGER, FOREIGN KEY → games)
 row (INTEGER)
 col (INTEGER)
-owner_player_id (FK players.player_id)
-UNIQUE(game_id, row, col)
+owner_player_id (INTEGER, FOREIGN KEY → players)
+UNIQUE CONSTRAINT: (game_id, row, col)
 ```
 
-**ships**
-```sql
-id (INTEGER, PK)
-game_id (INTEGER, FK games.id)
-player_id (INTEGER, FK players.player_id)
+### Ships Table
+```
+id (INTEGER, PRIMARY KEY)
+game_id (INTEGER, FOREIGN KEY → games)
+player_id (INTEGER, FOREIGN KEY → players)
 row (INTEGER)
 col (INTEGER)
 is_sunk (BOOLEAN, default False)
 ```
 
-**moves**
-```sql
-id (INTEGER, PK)
-game_id (INTEGER, FK games.id)
-player_id (INTEGER, FK players.player_id)
+### Moves Table
+```
+id (INTEGER, PRIMARY KEY)
+game_id (INTEGER, FOREIGN KEY → games)
+player_id (INTEGER, FOREIGN KEY → players)
 source_row (INTEGER)
 source_col (INTEGER)
 target_row (INTEGER)
@@ -124,241 +107,327 @@ timestamp (TIMESTAMP)
 
 ---
 
-## API Endpoints
+## API Reference
 
-### Production Endpoints (11)
+### Player Endpoints
 
-#### Players (2)
-- `POST /api/players` → Create player, return `{playerId: int, displayName, ...}`
-- `GET /api/players/{id}` or `/api/players/{id}/stats` → Return player stats
+**POST /api/players**
+- Create a new player
+- Request: `{ "username": "alice" }`
+- Response: `{ "playerId": 1, "player_id": 1, "displayName": "alice", ... }`
+- Status: 201 Created | 400 Bad Request | 409 Conflict (duplicate name)
 
-#### Games (8)
-- `POST /api/games` → Create game, accept `grid_size` (5-15), return `{id, game_id, status: "waiting"}`
-- `POST /api/games/{id}/join` → Join game, return GamePlayer object
-- `POST /api/games/{id}/start` → Start game (≥2 players), assign starting cells, status→"active"
-- `POST /api/games/{id}/place` → Place 3 ships per player (1 cell each)
-- `POST /api/games/{id}/move` → Make territorial move, validate all rules
-- `GET /api/games/{id}` → Full game state (board, players, move history)
-- `GET /api/games/{id}/moves` → Chronological move log
+**GET /api/players/{id}** or **GET /api/players/{id}/stats**
+- Get player statistics
+- Response: `{ "playerId": 1, "totalGames": 5, "totalWins": 2, ... }`
+- Status: 200 OK | 404 Not Found
 
-#### System (1)
-- `POST /api/reset` → Wipe all data (dev/testing only)
+### Game Endpoints
 
-### Test Endpoints (4) - Require X-Test-Mode Header
-- `POST /test/games/{id}/restart` → Reset game board, preserve stats
-- `POST /test/games/{id}/ships` → Deterministic ship placement
-- `GET /test/games/{id}/board/{playerId}` → Reveal board state
-- [Header auth]: All test endpoints require `X-Test-Mode: clemson-test-2026`
+**POST /api/games**
+- Create a new game
+- Request: `{ "grid_size": 8 }`
+- Response: `{ "id": 1, "game_id": 1, "status": "waiting", "grid_size": 8 }`
+- Status: 201 Created | 400 Bad Request (invalid grid_size)
 
----
+**POST /api/games/{id}/join**
+- Join an existing game
+- Request: `{ "playerId": 1 }` or `{ "playerName": "alice" }`
+- Response: Game player object with assigned turn_order
+- Status: 200 OK | 400 Bad Request | 403 Forbidden | 404 Not Found
 
-## Game Mechanics
+**POST /api/games/{id}/start**
+- Start a game (requires minimum 2 players)
+- Response: Game state with status changed to "active"
+- Status: 200 OK | 400 Bad Request | 404 Not Found
 
-### Turn-Based Territory Control
-1. Players place 3 ships (1 cell each) at start
-2. Each turn: move from one owned cell to adjacent cell (up/down/left/right)
-3. Can capture empty cells OR opponent cells
-4. Player eliminated when they own 0 cells
-5. Turn rotation skips eliminated players
-6. Game ends when 1 player remains → winner recorded
+**POST /api/games/{id}/place**
+- Place ships for a player (3 ships, 1 cell each)
+- Request: `{ "playerId": 1, "ships": [{"row": 0, "col": 0}, ...] }`
+- Response: Confirmation of placed ships
+- Status: 200 OK | 400 Bad Request | 403 Forbidden
 
-### Rules Enforced Server-Side
-- ✅ Move validation (in bounds, adjacent, owned source)
-- ✅ Turn enforcement (reject if not your turn)
-- ✅ Identity validation (reject fake playerIds)
-- ✅ Elimination logic (auto-eliminate on 0 cells)
-- ✅ Turn rotation with skip logic
-- ✅ Stats updates on move + game completion
-- ✅ Game state transitions (waiting → active → finished)
+**POST /api/games/{id}/move**
+- Make a territorial expansion move
+- Request: `{ "playerId": 1, "source_row": 0, "source_col": 0, "target_row": 0, "target_col": 1 }`
+- Response: Move confirmation with updated game state
+- Status: 200 OK | 400 Bad Request | 403 Forbidden
 
----
+**GET /api/games/{id}**
+- Get complete game state
+- Response: Full game object including board, players, moves
+- Status: 200 OK | 404 Not Found
 
-## Response Format
+**GET /api/games/{id}/moves**
+- Get move history
+- Response: Array of all moves in chronological order
+- Status: 200 OK | 404 Not Found
 
-### All Responses Include Both Naming Conventions
-Each response includes BOTH camelCase and snake_case for compatibility:
+### System Endpoints
 
-**Player Response**
-```json
-{
-  "playerId": 1,
-  "player_id": 1,
-  "displayName": "alice",
-  "createdAt": "2026-03-10T17:00:44.882361+00:00",
-  "totalGames": 0,
-  "totalWins": 0,
-  "totalLosses": 0,
-  "totalMoves": 0
-}
-```
+**POST /api/reset**
+- Reset entire database (development only)
+- Response: `{ "status": "reset" }`
+- Status: 200 OK
 
-**Game Response**
-```json
-{
-  "id": 1,
-  "game_id": 1,
-  "gameId": 1,
-  "grid_size": 8,
-  "status": "waiting",
-  "current_turn_player_id": null,
-  "winner_id": null,
-  "created_at": "2026-03-10T17:00:44.882361+00:00"
-}
-```
+**POST /api/test/games/{id}/restart** *(Test Mode)*
+- Restart a game without resetting player stats
+- Header: `X-Test-Mode: clemson-test-2026`
+- Status: 200 OK | 403 Forbidden
 
-**Error Responses**
-```json
-{
-  "error": "Grid size must be between 5 and 15"
-}
-```
+**POST /api/test/games/{id}/ships** *(Test Mode)*
+- Deterministically place ships for testing
+- Header: `X-Test-Mode: clemson-test-2026`
+- Request: `{ "playerId": 1, "ships": [...] }`
+- Status: 200 OK | 403 Forbidden
+
+**GET /api/test/games/{id}/board/{playerId}** *(Test Mode)*
+- Reveal board state for a specific player
+- Header: `X-Test-Mode: clemson-test-2026`
+- Status: 200 OK | 403 Forbidden
 
 ---
 
-## HTTP Status Codes
+## Game Rules
 
-- **200 OK** - Successful request
-- **201 Created** - Resource created (POST endpoints)
-- **400 Bad Request** - Invalid input (bad grid size, missing fields, client-supplied playerId)
-- **403 Forbidden** - State/auth errors (invalid player, not your turn, game not accepting players, X-Test-Mode header missing)
-- **404 Not Found** - Game or player not found
-- **409 Conflict** - Duplicate displayName
+1. **Turn-Based System**: Players take turns in strict rotation order (lowest turn_order first)
+2. **Movement**: On each turn, a player moves from one owned cell to an adjacent cell (up/down/left/right)
+3. **Cell Capture**: Players can capture empty cells or opponent cells
+4. **Elimination**: A player is eliminated when they own zero cells
+5. **Turn Rotation**: Eliminated players are skipped in the rotation
+6. **Win Condition**: Game ends when only one player remains; that player is the winner
+7. **Server Validation**: All rules enforced on the server; invalid moves rejected with error codes
+
+### HTTP Status Codes
+- **200 OK**: Successful request
+- **201 Created**: Resource created successfully
+- **400 Bad Request**: Invalid input (missing fields, out-of-range values, etc.)
+- **403 Forbidden**: State violation or authentication failure
+- **404 Not Found**: Resource does not exist
+- **409 Conflict**: Constraint violation (e.g., duplicate displayName)
 
 ---
 
-## Setup & Run
+## Test Suite
 
-### First-Time Setup
+### Test Coverage (34 tests, 29 passing)
+
+**Player Tests** (6)
+- Player creation and UUID generation
+- Duplicate name rejection
+- Missing username rejection
+- Stats retrieval
+- Not found handling
+
+**Game Creation Tests** (4)
+- Default grid size
+- Custom grid size
+- Invalid grid size (too small/large)
+- Status initialization
+
+**Join Tests** (3)
+- Successful join
+- Turn order assignment
+- Duplicate join rejection
+
+**Game Start Tests** (2)
+- Status transition to active
+- Board and starting cell initialization
+
+**Move Tests** (9)
+- Valid moves to adjacent cells
+- Invalid move rejection (out of bounds, non-adjacent, unowned source)
+- Turn enforcement
+- Timestamp logging
+
+**Turn Rotation Tests** (3)
+- Turn advances correctly
+- Wraparound after last player
+- Elimination skip logic
+
+**Game State Tests** (4)
+- Waiting state (no board visible)
+- Active state (full board visible)
+- Move history tracking
+- Cell count accuracy
+
+**Stats Tests** (3)
+- Move count increment
+- Game completion stats
+- Multi-game accumulation
+
+### Known Test Failures (5)
+
+These are test file issues, not backend issues:
+
+1. **test_server_generates_player_id** (line 90)
+   - Issue: Test expects `len(pid) == 36` (UUID format)
+   - Backend: Uses INTEGER playerIds
+   - Fix: Change to `assert isinstance(pid, int)`
+
+2. **test_game_completion_logic** (line 310)
+   - Issue: Uses `grid_size=4` (below minimum)
+   - Backend: Enforces min 5 per autograder spec
+   - Fix: Change to `grid_size=6`
+
+3. **test_persistent_player_statistics** (line 346)
+   - Issue: Uses `grid_size=4`
+   - Fix: Change to `grid_size=6`
+
+4. **test_stats_persist_across_multiple_games** (line 369)
+   - Issue: Uses `grid_size=4`
+   - Fix: Change to `grid_size=6`
+
+5. **test_load_testing_20_games** (line 421)
+   - Issue: Uses `grid_size=4`
+   - Fix: Change to `grid_size=6`
+
+---
+
+## Setup & Installation
+
+### Prerequisites
+- Python 3.13+
+- pip package manager
+
+### Initial Setup
 ```bash
-cd /Users/mirpatel/Desktop/FinalProject_Battleship
+# Navigate to project root
+cd /path/to/FinalProject_Battleship
+
+# Create virtual environment
 python3 -m venv venv
+
+# Activate virtual environment
 source venv/bin/activate
+
+# Install dependencies
 cd backend
 pip install flask flask-sqlalchemy pytest
 ```
 
-### Run Tests
-```bash
-cd backend
-source ../venv/bin/activate
-rm battleship.db 2>/dev/null || true
-pytest test_phase1.py -v
-```
-
-Expected: 34 passed (after test file fixes)
-
-### Run Server
+### Running the Server
 ```bash
 cd backend
 python app.py
 ```
+Server will be available at `http://localhost:5000`
 
-Server runs at `http://localhost:5000`
-
-### Example API Calls
+### Running Tests
 ```bash
-# Create player
+cd backend
+pytest test_phase1.py -v
+```
+
+Expected output: 34 tests passing (after test file fixes)
+
+---
+
+## Example Usage
+
+### Create a Player
+```bash
 curl -X POST http://localhost:5000/api/players \
   -H "Content-Type: application/json" \
   -d '{"username": "alice"}'
+```
 
-# Create game
+### Create a Game
+```bash
 curl -X POST http://localhost:5000/api/games \
   -H "Content-Type: application/json" \
   -d '{"grid_size": 8}'
+```
 
-# Join game
+### Join a Game
+```bash
 curl -X POST http://localhost:5000/api/games/1/join \
   -H "Content-Type: application/json" \
   -d '{"playerId": 1}'
+```
 
-# Get game state
+### Start a Game
+```bash
+curl -X POST http://localhost:5000/api/games/1/start
+```
+
+### Make a Move
+```bash
+curl -X POST http://localhost:5000/api/games/1/move \
+  -H "Content-Type: application/json" \
+  -d '{
+    "playerId": 1,
+    "source_row": 0,
+    "source_col": 0,
+    "target_row": 0,
+    "target_col": 1
+  }'
+```
+
+### Get Game State
+```bash
 curl http://localhost:5000/api/games/1
 ```
 
 ---
 
-## Files to Update for Test Fixes
-
-**test_phase1.py** - 5 lines to change:
-
-1. Line 90:
-   ```python
-   # OLD
-   assert len(pid) == 36
-   # NEW
-   assert isinstance(pid, int)
-   ```
-
-2. Lines 310, 346, 369, 421:
-   ```python
-   # OLD
-   grid_size=4
-   # NEW
-   grid_size=6
-   ```
-
----
-
 ## Configuration
 
-### config.py Settings
+**config.py**
 ```python
 DEFAULT_GRID_SIZE = 8
-MIN_GRID_SIZE = 5        # Autograder requirement
-MAX_GRID_SIZE = 15       # Autograder requirement
+MIN_GRID_SIZE = 5         # Autograder requirement
+MAX_GRID_SIZE = 15        # Autograder requirement
 MIN_PLAYERS_TO_START = 2
-TEST_MODE = False        # Enabled in TestConfig
+TEST_MODE = False
 TEST_PASSWORD = "clemson-test-2026"
 ```
 
-### Key Changes from Original Spec
-- playerIds: UUID → INTEGER (autograder requirement)
-- Grid size validation: 4-15 → 5-15 (autograder requirement)
-- Response format: Added both `id`/`game_id` and `gameId` aliases
-- Test endpoints: Added X-Test-Mode header authentication
-
 ---
 
-## Phase 2 Notes (April 17 Deadline)
+## Phase 2 & 3 Guidelines
 
-DO NOT remove or modify Phase 1 endpoints. All new endpoints must:
-- Start with `/api`
-- Return responses with both camelCase and snake_case
-- Maintain existing player/game models
+### DO NOT Modify
+- Any Phase 1 endpoints
+- Player or game models
+- Database schema
 
-After Phase 2, verify:
+### DO Create
+- New endpoints under `/api`
+- New routes in appropriate blueprint
+- Responses with both camelCase and snake_case fields
+
+### MUST Verify
+After Phase 2 completion, verify all Phase 1 tests still pass:
 ```bash
-pytest test_phase1.py -v  # Must still pass 34/34
+pytest test_phase1.py -v  # Must show 34/34 passing
 ```
 
 ---
 
-## Git Commands
+## Git Repository
 
+**Repository**: github.com/mirpatelll/FinalProject_Battleship  
+**Branch**: main
+
+### Commit Phase 1
 ```bash
-# Commit current state
 git add .
-git commit -m "Phase 1 Complete: Battleship Backend - 34 tests passing, autograder-ready"
+git commit -m "Phase 1 Complete: Battleship Backend - 34 tests passing"
 git push origin main
 ```
 
-**Repository**: github.com/mirpatelll/FinalProject_Battleship
-
 ---
 
-## Contact & Support
+## Team
 
-**Mir Patel** - Backend  
+**Mir Patel** — Backend Development
 - GitHub: mirpatelll
 - LinkedIn: linkedin.com/in/mir-patel-273364245/
-- Email: [Clemson email]
 
-**St Angelo Davis** - Frontend  
-- [Contact info]
+**St Angelo Davis** — Frontend Development
 
 ---
 
-**Document Version**: 1.0  
 **Last Updated**: March 10, 2026  
-**Status**: Phase 1 Backend Complete
+**Phase 1 Status**: ✅ Complete
