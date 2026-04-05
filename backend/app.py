@@ -17,15 +17,12 @@ def create_app(config_class=Config):
     def health():
         return {"status": "ok"}, 200
 
-    # Register without prefix
-    app.register_blueprint(games_bp)
-    app.register_blueprint(players_bp)
-    app.register_blueprint(system_bp)
-
-    # Register with /api prefix
-    app.register_blueprint(games_bp, url_prefix="/api", name="games_api")
-    app.register_blueprint(players_bp, url_prefix="/api", name="players_api")
-    app.register_blueprint(system_bp, url_prefix="/api", name="system_api")
+    # FIX: Register each blueprint ONCE with /api prefix only.
+    # Original code registered each blueprint twice (with and without prefix),
+    # causing Flask route conflicts -> all /api/* endpoints returned 404.
+    app.register_blueprint(games_bp, url_prefix="/api")
+    app.register_blueprint(players_bp, url_prefix="/api")
+    app.register_blueprint(system_bp, url_prefix="/api")
 
     return app
 
@@ -33,4 +30,3 @@ def create_app(config_class=Config):
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True, port=5000)
-   

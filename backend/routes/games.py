@@ -8,8 +8,13 @@ from models import Game, GamePlayer, Move, Player, Ship, db
 games_bp = Blueprint("games", __name__)
 
 
+def _pid(data):
+    """Extract player_id from request body — accepts snake_case or camelCase."""
+    return data.get("player_id") or data.get("playerId")
+
+
 # ------------------------------------------------------------------
-# POST /games  — Create a new game
+# POST /api/games  — Create a new game
 # ------------------------------------------------------------------
 @games_bp.route("/games", methods=["POST"])
 def create_game():
@@ -18,15 +23,13 @@ def create_game():
     grid_size = data.get("grid_size") or data.get("gridSize") or Config.DEFAULT_GRID_SIZE
     max_players = data.get("max_players") or data.get("maxPlayers") or 2
 
-    if not isinstance(grid_size, int) or grid_size < Config.MIN_GRID_SIZE or grid_size > Config.MAX_GRID_SIZE:
-        return jsonify({
-            "error": f"grid_size must be between {Config.MIN_GRID_SIZE} and {Config.MAX_GRID_SIZE}"
-        }), 400
+    if not isinstance(grid_size, int) or not (Config.MIN_GRID_SIZE <= grid_size <= Config.MAX_GRID_SIZE):
+        return jsonify({"error": f"grid_size must be between {Config.MIN_GRID_SIZE} and {Config.MAX_GRID_SIZE}"}), 400
 
     if not isinstance(max_players, int) or max_players < 1:
         return jsonify({"error": "max_players must be >= 1"}), 400
 
-    creator_id = data.get("creator_id") or data.get("creatorId") or data.get("player_id") or data.get("playerId")
+    creator_id = _pid(data) or data.get("creator_id") or data.get("creatorId")
 
     if creator_id:
         creator = db.session.get(Player, creator_id)
@@ -37,18 +40,16 @@ def create_game():
     db.session.add(game)
     db.session.flush()
 
-    # Creator auto-added with turn_order = 0
     if creator_id:
         gp = GamePlayer(game_id=game.id, player_id=creator_id, turn_order=0)
         db.session.add(gp)
 
     db.session.commit()
-
     return jsonify(game.to_dict()), 201
 
 
 # ------------------------------------------------------------------
-# POST /games/<id>/join
+# POST /api/games/<id>/join
 # ------------------------------------------------------------------
 @games_bp.route("/games/<int:game_id>/join", methods=["POST"])
 def join_game(game_id):
@@ -61,7 +62,15 @@ def join_game(game_id):
     if game.status != "waiting":
         return jsonify({"error": "Game is not accepting players"}), 409
 
-    player_id = data.get("player_id") or data.get("playerId")
+    # Accept player_id or playerName lookup
+    player_id = _pid(data)
+    player_name = data.get("playerName") or data.get("username")
+
+    if not player_id and player_name:
+        p = Player.query.filter_by(username=player_name).first()
+        if p:
+            player_id = p.player_id
+
     if not player_id:
         return jsonify({"error": "player_id is required"}), 400
 
@@ -69,12 +78,10 @@ def join_game(game_id):
     if not player:
         return jsonify({"error": "Invalid player_id"}), 404
 
-    existing = GamePlayer.query.filter_by(game_id=game_id, player_id=player_id).first()
-    if existing:
+    if GamePlayer.query.filter_by(game_id=game_id, player_id=player_id).first():
         return jsonify({"error": "Player already in this game"}), 409
 
     current_count = GamePlayer.query.filter_by(game_id=game_id).count()
-
     if current_count >= game.max_players:
         return jsonify({"error": "Game is full"}), 409
 
@@ -86,19 +93,18 @@ def join_game(game_id):
 
 
 # ------------------------------------------------------------------
-# GET /games/<id>
+# GET /api/games/<id>
 # ------------------------------------------------------------------
 @games_bp.route("/games/<int:game_id>", methods=["GET"])
 def get_game(game_id):
     game = db.session.get(Game, game_id)
     if not game:
         return jsonify({"error": "Game not found"}), 404
-
     return jsonify(game.to_dict()), 200
 
 
 # ------------------------------------------------------------------
-# POST /games/<id>/start  — Start a game (transition from waiting -> placing)
+# POST /api/games/<id>/start
 # ------------------------------------------------------------------
 @games_bp.route("/games/<int:game_id>/start", methods=["POST"])
 def start_game(game_id):
@@ -109,18 +115,16 @@ def start_game(game_id):
     if game.status != "waiting":
         return jsonify({"error": "Game already started or finished"}), 400
 
-    player_count = GamePlayer.query.filter_by(game_id=game_id).count()
-    if player_count < 2:
+    if GamePlayer.query.filter_by(game_id=game_id).count() < 2:
         return jsonify({"error": "Need at least 2 players to start"}), 400
 
     game.status = "placing"
     db.session.commit()
-
     return jsonify(game.to_dict()), 200
 
 
 # ------------------------------------------------------------------
-# POST /games/<id>/place  — Place 3 ships
+# POST /api/games/<id>/place  — Place exactly 3 ships
 # ------------------------------------------------------------------
 @games_bp.route("/games/<int:game_id>/place", methods=["POST"])
 def place_ships(game_id):
@@ -130,11 +134,10 @@ def place_ships(game_id):
     if not game:
         return jsonify({"error": "Game not found"}), 404
 
-    # Allow placement in "waiting" or "placing" — not "active" or "finished"
     if game.status not in ("waiting", "placing"):
         return jsonify({"error": "Ships can only be placed before the game is active"}), 409
 
-    player_id = data.get("player_id") or data.get("playerId")
+    player_id = _pid(data)
     if not player_id:
         return jsonify({"error": "player_id is required"}), 400
 
@@ -164,38 +167,24 @@ def place_ships(game_id):
             return jsonify({"error": f"Duplicate position ({row},{col})"}), 400
         positions.add((row, col))
 
-    # Check no overlap with own existing ships
-    for row, col in positions:
-        existing = Ship.query.filter_by(game_id=game_id, player_id=player_id, row=row, col=col).first()
-        if existing:
-            return jsonify({"error": f"Overlap at ({row},{col})"}), 400
-
     placed = []
     for row, col in positions:
-        ship = Ship(game_id=game_id, player_id=player_id, row=row, col=col)
-        db.session.add(ship)
+        db.session.add(Ship(game_id=game_id, player_id=player_id, row=row, col=col))
         placed.append({"row": row, "col": col})
 
     gp.ships_placed = True
 
-    # Auto-start only when ALL players have placed ships
     all_gps = GamePlayer.query.filter_by(game_id=game_id).all()
     if len(all_gps) >= 2 and all(g.ships_placed for g in all_gps):
         game.status = "active"
         game.current_turn_index = 0
 
     db.session.commit()
-
-    return jsonify({
-        "status": "placed",
-        "game_id": game_id,
-        "player_id": player_id,
-        "ships": placed,
-    }), 200
+    return jsonify({"status": "placed", "game_id": game_id, "player_id": player_id, "ships": placed}), 200
 
 
 # ------------------------------------------------------------------
-# POST /games/<id>/fire  — Fire a shot
+# POST /api/games/<id>/fire
 # ------------------------------------------------------------------
 @games_bp.route("/games/<int:game_id>/fire", methods=["POST"])
 def fire(game_id):
@@ -205,15 +194,13 @@ def fire(game_id):
     if not game:
         return jsonify({"error": "Game not found"}), 404
 
-    # Finished game — return 410 Gone
     if game.status == "finished":
         return jsonify({"error": "Game is already finished"}), 410
 
-    # Placing or waiting — return 409 (ships not all placed)
     if game.status != "active":
         return jsonify({"error": "Game is not active. All players must place ships before firing."}), 409
 
-    player_id = data.get("player_id") or data.get("playerId")
+    player_id = _pid(data)
     row = data.get("row")
     col = data.get("col")
 
@@ -228,11 +215,12 @@ def fire(game_id):
     if not gp:
         return jsonify({"error": "Player is not in this game"}), 403
 
-    # Turn enforcement
-    active_players = [
-        g for g in GamePlayer.query.filter_by(game_id=game_id, is_eliminated=False)
-        .order_by(GamePlayer.turn_order).all()
-    ]
+    active_players = (
+        GamePlayer.query
+        .filter_by(game_id=game_id, is_eliminated=False)
+        .order_by(GamePlayer.turn_order)
+        .all()
+    )
 
     if not active_players:
         return jsonify({"error": "No active players"}), 400
@@ -241,18 +229,12 @@ def fire(game_id):
     if current_player.player_id != player_id:
         return jsonify({"error": "It is not your turn"}), 403
 
-    # Bounds check
     if not (0 <= row < game.grid_size and 0 <= col < game.grid_size):
         return jsonify({"error": "Coordinates out of bounds"}), 400
 
-    # Check for duplicate shot
-    existing_move = Move.query.filter_by(
-        game_id=game_id, player_id=player_id, row=row, col=col
-    ).first()
-    if existing_move:
+    if Move.query.filter_by(game_id=game_id, player_id=player_id, row=row, col=col).first():
         return jsonify({"error": "Already fired at this location"}), 400
 
-    # Check if hit any opponent's ship
     hit_ship = Ship.query.filter(
         Ship.game_id == game_id,
         Ship.player_id != player_id,
@@ -261,53 +243,37 @@ def fire(game_id):
         Ship.is_sunk == False,
     ).first()
 
-    result = "miss"
+    result = "hit" if hit_ship else "miss"
     if hit_ship:
-        result = "hit"
         hit_ship.is_sunk = True
 
-    # Log the move
-    move = Move(
-        game_id=game_id,
-        player_id=player_id,
-        row=row,
-        col=col,
-        result=result,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-    )
-    db.session.add(move)
+    db.session.add(Move(game_id=game_id, player_id=player_id, row=row, col=col, result=result))
 
-    # Update player shot/hit stats immediately
     player.total_shots += 1
     if result == "hit":
         player.total_hits += 1
 
-    # Check eliminations — a player is eliminated when all their ships are sunk
+    # Check eliminations
     for other_gp in active_players:
         if other_gp.player_id == player_id or other_gp.is_eliminated:
             continue
-        remaining = Ship.query.filter_by(
-            game_id=game_id, player_id=other_gp.player_id, is_sunk=False
-        ).count()
-        if remaining == 0:
+        if Ship.query.filter_by(game_id=game_id, player_id=other_gp.player_id, is_sunk=False).count() == 0:
             other_gp.is_eliminated = True
 
-    # Refresh active players after eliminations
-    active_players = [
-        g for g in GamePlayer.query.filter_by(game_id=game_id, is_eliminated=False)
-        .order_by(GamePlayer.turn_order).all()
-    ]
+    # Refresh active list after eliminations
+    active_players = (
+        GamePlayer.query
+        .filter_by(game_id=game_id, is_eliminated=False)
+        .order_by(GamePlayer.turn_order)
+        .all()
+    )
 
-    # Check for winner
     next_player_id = None
     if len(active_players) <= 1:
         game.status = "finished"
         if active_players:
             game.winner_id = active_players[0].player_id
-
-        # Update win/loss/games_played for all players
-        all_gps = GamePlayer.query.filter_by(game_id=game_id).all()
-        for g in all_gps:
+        for g in GamePlayer.query.filter_by(game_id=game_id).all():
             p = db.session.get(Player, g.player_id)
             if p:
                 p.games_played += 1
@@ -316,40 +282,26 @@ def fire(game_id):
                 else:
                     p.losses += 1
     else:
-        # Advance turn to next active player
-        current_idx = None
-        for i, ap in enumerate(active_players):
-            if ap.player_id == player_id:
-                current_idx = i
-                break
-        if current_idx is not None:
-            next_idx = (current_idx + 1) % len(active_players)
-        else:
-            next_idx = 0
+        current_idx = next((i for i, ap in enumerate(active_players) if ap.player_id == player_id), 0)
+        next_idx = (current_idx + 1) % len(active_players)
         game.current_turn_index = active_players[next_idx].turn_order
         next_player_id = active_players[next_idx].player_id
 
     db.session.commit()
 
-    response = {
-        "result": result,
-        "next_player_id": next_player_id,
-        "game_status": game.status,
-    }
+    response = {"result": result, "next_player_id": next_player_id, "game_status": game.status}
     if game.status == "finished":
         response["winner_id"] = game.winner_id
-
     return jsonify(response), 200
 
 
 # ------------------------------------------------------------------
-# GET /games/<id>/moves
+# GET /api/games/<id>/moves
 # ------------------------------------------------------------------
 @games_bp.route("/games/<int:game_id>/moves", methods=["GET"])
 def get_moves(game_id):
     game = db.session.get(Game, game_id)
     if not game:
         return jsonify({"error": "Game not found"}), 404
-
     moves = Move.query.filter_by(game_id=game_id).order_by(Move.id).all()
     return jsonify([m.to_dict() for m in moves]), 200

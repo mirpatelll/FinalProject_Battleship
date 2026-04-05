@@ -9,7 +9,7 @@ players_bp = Blueprint("players", __name__)
 def create_player():
     data = request.get_json(silent=True) or {}
 
-    # Reject client-supplied player_id
+    # Reject client-supplied IDs
     if "player_id" in data or "playerId" in data or "id" in data:
         return jsonify({"error": "Client may not supply player_id"}), 400
 
@@ -26,19 +26,19 @@ def create_player():
 
     username = username.strip()
 
-    existing = Player.query.filter_by(username=username).first()
-    if existing:
+    if Player.query.filter_by(username=username).first():
         return jsonify({"error": "username already taken"}), 409
 
     player = Player(username=username)
     db.session.add(player)
     db.session.commit()
 
-    return jsonify({"player_id": player.player_id}), 201
+    # Return full player object with both snake_case and camelCase
+    return jsonify(player.stats_dict()), 201
 
 
-@players_bp.route("/players/<int:player_id>/stats", methods=["GET"])
-@players_bp.route("/players/<int:player_id>", methods=["GET"])
+@players_bp.route("/players/<player_id>/stats", methods=["GET"])
+@players_bp.route("/players/<player_id>", methods=["GET"])
 def get_player_stats(player_id):
     player = db.session.get(Player, player_id)
     if not player:
