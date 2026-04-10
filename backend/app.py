@@ -2,6 +2,9 @@ from flask import Flask
 
 from config import Config
 from database import init_db
+from routes.games import games_bp
+from routes.players import players_bp
+from routes.system import system_bp
 
 
 def create_app(config_class=Config):
@@ -11,16 +14,13 @@ def create_app(config_class=Config):
     init_db(app)
 
     @app.route("/")
-    def root_health():
+    def health():
         return {"status": "ok"}, 200
 
-    from routes.games import register_game_routes
-    from routes.players import register_player_routes
-    from routes.system import register_system_routes
-
-    register_game_routes(app)
-    register_player_routes(app)
-    register_system_routes(app)
+    # Register each blueprint once with the /api prefix.
+    app.register_blueprint(games_bp, url_prefix="/api")
+    app.register_blueprint(players_bp, url_prefix="/api")
+    app.register_blueprint(system_bp, url_prefix="/api")
 
     return app
 
