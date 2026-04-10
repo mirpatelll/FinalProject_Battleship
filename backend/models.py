@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
@@ -72,7 +71,7 @@ class Game(db.Model):
     moves = db.relationship("Move", back_populates="game", lazy=True, order_by="Move.id")
 
     def _current_turn_player_id(self):
-        if self.status not in ("playing", "active"):
+        if self.status != "playing":
             return None
         active = [gp for gp in self.game_players if not gp.is_eliminated]
         if not active:
@@ -129,16 +128,6 @@ class GamePlayer(db.Model):
     game = db.relationship("Game", back_populates="game_players")
     player = db.relationship("Player", back_populates="game_players")
 
-    def to_dict(self):
-        return {
-            "game_id": self.game_id,
-            "player_id": self.player_id,
-            "turn_order": self.turn_order,
-            "is_eliminated": self.is_eliminated,
-            "ships_placed": self.ships_placed,
-            "status": "joined",
-        }
-
 
 class Ship(db.Model):
     __tablename__ = "ships"
@@ -151,16 +140,6 @@ class Ship(db.Model):
     is_sunk = db.Column(db.Boolean, nullable=False, default=False)
 
     game = db.relationship("Game", back_populates="ships")
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "game_id": self.game_id,
-            "player_id": self.player_id,
-            "row": self.row,
-            "col": self.col,
-            "is_sunk": self.is_sunk,
-        }
 
 
 class Move(db.Model):
