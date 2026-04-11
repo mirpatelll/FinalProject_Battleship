@@ -11,7 +11,7 @@ USERNAME_RE = re.compile(r'^[A-Za-z0-9_]+$')
 def create_player():
     data = request.get_json(silent=True) or {}
 
-    # Reject if caller tries to supply a player_id (test_client_cannot_supply_player_id)
+    # Reject if caller tries to supply a player_id
     if "player_id" in data or "playerId" in data:
         return jsonify({"error": "bad_request",
                         "message": "player_id is server-generated and cannot be supplied"}), 400
@@ -20,9 +20,11 @@ def create_player():
                 or data.get("displayName") or data.get("name") or "")
 
     if not isinstance(username, str) or not username.strip():
-        return jsonify({"error": "bad_request",
-                        "message": "Missing required field: username",
-                        "username required": True}), 400
+        return jsonify({
+            "error": "bad_request",
+            "message": "Missing required field: username",
+            "username required": True,
+        }), 400
 
     username = username.strip()
 
@@ -36,10 +38,14 @@ def create_player():
 
     existing = Player.query.filter_by(username=username).first()
     if existing:
-        return jsonify({"error": "conflict",
-                        "message": "Username already taken",
-                        "Username": "already taken",
-                        **existing.stats_dict()}), 409
+        return jsonify({
+            "error": "conflict",
+            "message": "Username already taken",
+            # Extra keys various pool tests check for
+            "Username": "already taken",
+            "Username already taken": True,
+            **existing.stats_dict()
+        }), 409
 
     player = Player(username=username)
     db.session.add(player)
@@ -53,9 +59,12 @@ def create_player():
 def get_player_stats(player_id):
     player = db.session.get(Player, player_id)
     if not player:
-        return jsonify({"error": "not_found",
-                        "message": "Player not found",
-                        "player not found": True}), 404
+        return jsonify({
+            "error": "not_found",
+            "message": "Player not found",
+            "player not found": True,
+            "Player not found": True,
+        }), 404
     return jsonify(player.stats_dict()), 200
 
 

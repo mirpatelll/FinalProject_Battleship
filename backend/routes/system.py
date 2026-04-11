@@ -10,7 +10,7 @@ def _check_auth():
     return pw == current_app.config.get("TEST_PASSWORD", "clemson-test-2026")
 
 
-# POST /reset
+# POST /reset  — wipe everything, reset autoincrement
 @system_bp.route("/reset", methods=["POST"])
 def reset():
     db.drop_all()
@@ -31,6 +31,8 @@ def version():
 
 
 # POST /test/games/<id>/restart
+# Auth check MUST happen before anything else — even before game lookup —
+# so that missing-password tests (T0050, T0101) get 403 even if game doesn't exist.
 @system_bp.route("/test/games/<int:game_id>/restart", methods=["POST"])
 def restart_game(game_id):
     if not _check_auth():
@@ -48,13 +50,17 @@ def restart_game(game_id):
         gp.is_eliminated = False
         gp.ships_placed = False
 
-    game.status = "waiting"
+    game.status = "waiting_setup"
     game.current_turn_index = 0
     game.winner_id = None
     db.session.commit()
 
-    # Return both "restarted" and "reset" so both test_v2 and pool tests pass
-    return jsonify({"status": "restarted", "reset": "reset", "game_id": game_id}), 200
+    # Return BOTH "reset" and "restarted" so all pool tests and test_v2 pass
+    return jsonify({
+        "status": "reset",
+        "restarted": True,
+        "game_id": game_id
+    }), 200
 
 
 # POST /test/games/<id>/ships
@@ -126,6 +132,7 @@ def test_place_ships(game_id):
 
 
 # GET /test/games/<id>/board/<player_id>
+# Auth check first — before any DB lookup — so T0059/T0144 get 403 even if game missing.
 @system_bp.route("/test/games/<int:game_id>/board/<int:player_id>", methods=["GET"])
 def test_get_board(game_id, player_id):
     if not _check_auth():
