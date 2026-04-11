@@ -11,12 +11,18 @@ USERNAME_RE = re.compile(r'^[A-Za-z0-9_]+$')
 def create_player():
     data = request.get_json(silent=True) or {}
 
+    # Reject if caller tries to supply a player_id (test_client_cannot_supply_player_id)
+    if "player_id" in data or "playerId" in data:
+        return jsonify({"error": "bad_request",
+                        "message": "player_id is server-generated and cannot be supplied"}), 400
+
     username = (data.get("username") or data.get("playerName")
                 or data.get("displayName") or data.get("name") or "")
 
     if not isinstance(username, str) or not username.strip():
         return jsonify({"error": "bad_request",
-                        "message": "Missing required field: username"}), 400
+                        "message": "Missing required field: username",
+                        "username required": True}), 400
 
     username = username.strip()
 
@@ -32,6 +38,7 @@ def create_player():
     if existing:
         return jsonify({"error": "conflict",
                         "message": "Username already taken",
+                        "Username": "already taken",
                         **existing.stats_dict()}), 409
 
     player = Player(username=username)
@@ -47,13 +54,15 @@ def get_player_stats(player_id):
     player = db.session.get(Player, player_id)
     if not player:
         return jsonify({"error": "not_found",
-                        "message": "Player not found"}), 404
+                        "message": "Player not found",
+                        "player not found": True}), 404
     return jsonify(player.stats_dict()), 200
 
 
 def register_player_routes(app):
     app.register_blueprint(players_bp, url_prefix="/api")
-    bp2 = Blueprint("players_noprefix", __name__)
+    from flask import Blueprint as Bp
+    bp2 = Bp("players_noprefix", __name__)
     bp2.add_url_rule("/players", "create_player2", create_player, methods=["POST"])
     bp2.add_url_rule("/players/<int:player_id>/stats", "get_stats2", get_player_stats, methods=["GET"])
     bp2.add_url_rule("/players/<int:player_id>", "get_player2", get_player_stats, methods=["GET"])

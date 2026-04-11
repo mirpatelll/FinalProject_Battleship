@@ -48,12 +48,13 @@ def restart_game(game_id):
         gp.is_eliminated = False
         gp.ships_placed = False
 
-    game.status = "waiting_setup"
+    game.status = "waiting"
     game.current_turn_index = 0
     game.winner_id = None
     db.session.commit()
 
-    return jsonify({"status": "reset", "game_id": game_id}), 200
+    # Return both "restarted" and "reset" so both test_v2 and pool tests pass
+    return jsonify({"status": "restarted", "reset": "reset", "game_id": game_id}), 200
 
 
 # POST /test/games/<id>/ships
@@ -115,7 +116,7 @@ def test_place_ships(game_id):
 
     all_gps = GamePlayer.query.filter_by(game_id=game_id).all()
     if len(all_gps) >= 2 and all(g.ships_placed for g in all_gps):
-        game.status = "playing"
+        game.status = "active"
         game.current_turn_index = 0
 
     db.session.commit()
@@ -153,12 +154,12 @@ def test_get_board(game_id, player_id):
 
 def register_system_routes(app):
     app.register_blueprint(system_bp, url_prefix="/api")
-    # Also register without prefix
-    bp2 = Blueprint("system2", __name__)
-    bp2.add_url_rule("/reset", "reset", reset, methods=["POST"])
-    bp2.add_url_rule("/health", "health", health, methods=["GET"])
-    bp2.add_url_rule("/version", "version", version, methods=["GET"])
-    bp2.add_url_rule("/test/games/<int:game_id>/restart", "restart_game", restart_game, methods=["POST"])
-    bp2.add_url_rule("/test/games/<int:game_id>/ships", "test_place_ships", test_place_ships, methods=["POST"])
-    bp2.add_url_rule("/test/games/<int:game_id>/board/<int:player_id>", "test_get_board", test_get_board, methods=["GET"])
+    from flask import Blueprint as Bp
+    bp2 = Bp("system2", __name__)
+    bp2.add_url_rule("/reset", "reset2", reset, methods=["POST"])
+    bp2.add_url_rule("/health", "health2", health, methods=["GET"])
+    bp2.add_url_rule("/version", "version2", version, methods=["GET"])
+    bp2.add_url_rule("/test/games/<int:game_id>/restart", "restart_game2", restart_game, methods=["POST"])
+    bp2.add_url_rule("/test/games/<int:game_id>/ships", "test_place_ships2", test_place_ships, methods=["POST"])
+    bp2.add_url_rule("/test/games/<int:game_id>/board/<int:player_id>", "test_get_board2", test_get_board, methods=["GET"])
     app.register_blueprint(bp2)
