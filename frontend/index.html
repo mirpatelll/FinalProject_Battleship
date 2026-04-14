@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Battleship</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Top bar (always visible once logged in) -->
+  <header id="topbar" class="hidden">
+    <div class="brand">
+      <span class="brand-icon">⚓</span>
+      <span class="brand-text">BATTLESHIP</span>
+    </div>
+    <div class="user-info">
+      <span id="user-label"></span>
+      <button id="btn-leaderboard" class="ghost">Leaderboard</button>
+      <button id="btn-logout" class="ghost">Logout</button>
+    </div>
+  </header>
+
+  <main id="app">
+
+    <!-- ============================ LOGIN VIEW ============================ -->
+    <section id="view-login" class="view">
+      <div class="login-card">
+        <div class="login-logo">⚓</div>
+        <h1>BATTLESHIP</h1>
+        <p class="tagline">Sink or be sunk.</p>
+        <input id="username-input" type="text" placeholder="Enter your callsign"
+               maxlength="30" autocomplete="off" />
+        <button id="btn-login" class="primary">Enlist</button>
+        <p class="hint">Letters, numbers, and underscores only.</p>
+      </div>
+    </section>
+
+    <!-- ============================ LOBBY VIEW ============================ -->
+    <section id="view-lobby" class="view hidden">
+      <div class="lobby-grid">
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Open Games</h2>
+            <button id="btn-refresh" class="ghost small">↻ Refresh</button>
+          </div>
+          <div id="games-list" class="games-list">
+            <p class="empty">Loading games...</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><h2>New Game</h2></div>
+          <div class="form-group">
+            <label for="grid-size">Grid Size</label>
+            <input id="grid-size" type="number" min="5" max="15" value="8" />
+            <small>Between 5 and 15</small>
+          </div>
+          <div class="form-group">
+            <label for="max-players">Max Players</label>
+            <input id="max-players" type="number" min="2" max="10" value="2" />
+            <small>Between 2 and 10</small>
+          </div>
+          <button id="btn-create" class="primary full">Create Game</button>
+
+          <div class="stats-mini">
+            <h3>Your Stats</h3>
+            <div id="my-stats" class="stats-row">Loading...</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ GAME VIEW ============================ -->
+    <section id="view-game" class="view hidden">
+      <div class="game-header">
+        <button id="btn-back" class="ghost">← Back to Lobby</button>
+        <div class="game-meta">
+          <span>Game <strong id="game-id-label">#?</strong></span>
+          <span class="dot">•</span>
+          <span id="game-status-label" class="status-pill">...</span>
+          <span class="dot">•</span>
+          <span id="turn-label">...</span>
+        </div>
+      </div>
+
+      <!-- Phase banner: shows what to do right now -->
+      <div id="phase-banner" class="phase-banner hidden"></div>
+
+      <div class="game-body">
+        <div class="board-wrap">
+          <h3>Your Board</h3>
+          <div id="my-board" class="board"></div>
+          <p class="board-legend">
+            <span class="lg-ship"></span> Ship
+            <span class="lg-hit"></span> Hit
+            <span class="lg-miss"></span> Miss
+          </p>
+        </div>
+
+        <div class="board-wrap">
+          <h3 id="opp-title">Opponent's Board</h3>
+          <div id="opp-tabs" class="opp-tabs"></div>
+          <div id="opp-board" class="board"></div>
+          <p class="board-legend">Click a cell to fire.</p>
+        </div>
+      </div>
+
+      <div class="game-footer">
+        <div class="panel">
+          <h3>Move History</h3>
+          <div id="move-history" class="move-history"><p class="empty">No moves yet.</p></div>
+        </div>
+        <div class="panel">
+          <h3>Players</h3>
+          <div id="players-list" class="players-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ LEADERBOARD MODAL ============================ -->
+    <div id="leaderboard-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Leaderboard</h2>
+          <button id="btn-close-lb" class="ghost">✕</button>
+        </div>
+        <div id="leaderboard-body"><p class="empty">Loading...</p></div>
+      </div>
+    </div>
+
+    <!-- ============================ WIN MODAL ============================ -->
+    <div id="win-modal" class="modal hidden">
+      <div class="modal-content win-modal">
+        <h2 id="win-title">🏆 Victory!</h2>
+        <p id="win-text"></p>
+        <button id="btn-win-close" class="primary">Back to Lobby</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Toast notifications -->
+  <div id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

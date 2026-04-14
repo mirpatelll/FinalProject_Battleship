@@ -356,15 +356,45 @@ def get_moves(game_id):
     return jsonify([m.to_dict() for m in moves]), 200
 
 
+# ==================================================================
+# NEW PHASE 2 ENDPOINTS (additive only, no Phase 1 contracts touched)
+# ==================================================================
+
+# ------------------------------------------------------------------
+# GET /games  (list all games for the lobby)
+# ------------------------------------------------------------------
+@games_bp.route("/games", methods=["GET"])
+def list_games():
+    status_filter = request.args.get("status")
+    q = Game.query
+    if status_filter:
+        q = q.filter(Game.status == status_filter)
+    games = q.order_by(Game.id.desc()).limit(100).all()
+    return jsonify([g.to_dict() for g in games]), 200
+
+
+# ------------------------------------------------------------------
+# GET /leaderboard  (top players by wins)
+# ------------------------------------------------------------------
+@games_bp.route("/leaderboard", methods=["GET"])
+def leaderboard():
+    players = (Player.query
+               .order_by(Player.wins.desc(), Player.total_hits.desc())
+               .limit(50).all())
+    return jsonify([p.stats_dict() for p in players]), 200
+
+
 def register_game_routes(app):
     app.register_blueprint(games_bp, url_prefix="/api")
     from flask import Blueprint as Bp
     bp2 = Bp("games2", __name__)
     bp2.add_url_rule("/games", "create_game2", create_game, methods=["POST"])
+    bp2.add_url_rule("/games", "list_games2", list_games, methods=["GET"])
     bp2.add_url_rule("/games/<int:game_id>/join", "join_game2", join_game, methods=["POST"])
     bp2.add_url_rule("/games/<int:game_id>", "get_game2", get_game, methods=["GET"])
     bp2.add_url_rule("/games/<int:game_id>/start", "start_game2", start_game, methods=["POST"])
     bp2.add_url_rule("/games/<int:game_id>/place", "place_ships2", place_ships, methods=["POST"])
     bp2.add_url_rule("/games/<int:game_id>/fire", "fire2", fire, methods=["POST"])
     bp2.add_url_rule("/games/<int:game_id>/moves", "get_moves2", get_moves, methods=["GET"])
+    bp2.add_url_rule("/leaderboard", "leaderboard2", leaderboard, methods=["GET"])
     app.register_blueprint(bp2)
