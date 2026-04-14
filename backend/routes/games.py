@@ -94,7 +94,6 @@ def join_game(game_id):
         return jsonify({"error": "not_found",
                         "message": "Player not found. Player does not exist."}), 404
 
-    # If already in game, return success idempotently
     existing_gp = GamePlayer.query.filter_by(game_id=game_id, player_id=player_id).first()
     if existing_gp:
         return jsonify({"error": "conflict",
@@ -360,9 +359,6 @@ def get_moves(game_id):
 # NEW PHASE 2 ENDPOINTS (additive only, no Phase 1 contracts touched)
 # ==================================================================
 
-# ------------------------------------------------------------------
-# GET /games  (list all games for the lobby)
-# ------------------------------------------------------------------
 @games_bp.route("/games", methods=["GET"])
 def list_games():
     status_filter = request.args.get("status")
@@ -373,9 +369,6 @@ def list_games():
     return jsonify([g.to_dict() for g in games]), 200
 
 
-# ------------------------------------------------------------------
-# GET /leaderboard  (top players by wins)
-# ------------------------------------------------------------------
 @games_bp.route("/leaderboard", methods=["GET"])
 def leaderboard():
     players = (Player.query
@@ -398,3 +391,5 @@ def register_game_routes(app):
     bp2.add_url_rule("/games/<int:game_id>/moves", "get_moves2", get_moves, methods=["GET"])
     bp2.add_url_rule("/leaderboard", "leaderboard2", leaderboard, methods=["GET"])
     app.register_blueprint(bp2)
+
+    

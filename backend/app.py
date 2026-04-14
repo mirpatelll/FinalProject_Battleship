@@ -9,7 +9,6 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
 
     # Allow any origin so the Netlify frontend (and local dev) can hit this API.
-    # Phase 2 frontend is deployed separately, so we need CORS open.
     CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
     init_db(app)
