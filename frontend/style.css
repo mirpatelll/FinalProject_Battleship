@@ -40,22 +40,22 @@
   --modal-bg:       var(--navy-800);
 }
 
-/* Light mode overrides */
+/* Light mode overrides — pale ocean blue, same game feel */
 [data-theme="light"] {
-  --bg-page:        radial-gradient(ellipse at top, #dce8f5 0%, #eef4fb 60%, #f5f8fc 100%);
-  --bg-panel:       rgba(255,255,255,0.75);
-  --bg-card:        rgba(255,255,255,0.6);
-  --bg-input:       rgba(255,255,255,0.9);
-  --border-subtle:  rgba(0,0,0,0.08);
-  --border-gold:    rgba(200,157,44,0.35);
-  --text-primary:   #0f1f3a;
-  --text-secondary: #4a6080;
-  --text-gold:      #9a7210;
-  --cell-default:   #b8cce0;
-  --topbar-bg:      rgba(255,255,255,0.88);
-  --modal-bg:       #ffffff;
-  --slate:          #4a6080;
-  --cream:          #0f1f3a;
+  --bg-page:        radial-gradient(ellipse at top, #c8dff5 0%, #d8ecf8 50%, #e4f2fb 100%);
+  --bg-panel:       rgba(210,232,248,0.75);
+  --bg-card:        rgba(195,222,243,0.55);
+  --bg-input:       rgba(220,238,252,0.9);
+  --border-subtle:  rgba(42,77,143,0.14);
+  --border-gold:    rgba(180,137,24,0.4);
+  --text-primary:   #0a1628;
+  --text-secondary: #2a4d8f;
+  --text-gold:      #8a6800;
+  --cell-default:   #7aaed4;
+  --topbar-bg:      rgba(180,215,240,0.88);
+  --modal-bg:       #d4eaf8;
+  --slate:          #2a4d8f;
+  --cream:          #0a1628;
   --gold:           #c89d2c;
   --gold-dim:       #9a7210;
   --shadow:         0 8px 32px rgba(0,0,0,0.12);
