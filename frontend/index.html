@@ -8,7 +8,6 @@
 </head>
 <body>
 
-  <!-- Top bar (always visible once logged in) -->
   <header id="topbar" class="hidden">
     <div class="brand">
       <span class="brand-icon">⚓</span>
@@ -24,7 +23,7 @@
 
   <main id="app">
 
-    <!-- ============================ LOGIN VIEW ============================ -->
+    <!-- LOGIN -->
     <section id="view-login" class="view">
       <div class="login-theme-row">
         <span>Appearance</span>
@@ -34,23 +33,19 @@
         <div class="login-logo">⚓</div>
         <h1>BATTLESHIP</h1>
         <p class="tagline">Sink or be sunk.</p>
-
         <div class="login-field">
           <label for="username-input">Callsign</label>
           <input id="username-input" type="text" placeholder="Enter your callsign"
                  maxlength="30" autocomplete="off" spellcheck="false" />
         </div>
-
         <button id="btn-login" class="primary full">Continue</button>
-
         <p class="login-sub">New callsign? We'll create your account. Returning? You'll be signed right in.</p>
       </div>
     </section>
 
-    <!-- ============================ LOBBY VIEW ============================ -->
+    <!-- LOBBY -->
     <section id="view-lobby" class="view hidden">
       <div class="lobby-grid">
-
         <div class="panel">
           <div class="panel-header">
             <h2>Open Games</h2>
@@ -75,7 +70,6 @@
             <small>Between 2 and 10</small>
           </div>
           <button id="btn-create" class="primary full">Create Game</button>
-
           <div class="stats-mini">
             <h3>Your Stats</h3>
             <div id="my-stats" class="stats-row">Loading...</div>
@@ -84,7 +78,7 @@
       </div>
     </section>
 
-    <!-- ============================ GAME VIEW ============================ -->
+    <!-- GAME -->
     <section id="view-game" class="view hidden">
       <div class="game-header">
         <button id="btn-back" class="primary small">⚓ Lobby</button>
@@ -95,6 +89,11 @@
           <span class="dot">•</span>
           <span id="turn-label">...</span>
         </div>
+      </div>
+
+      <!-- Spectator banner -->
+      <div id="spectator-banner" class="spectator-banner hidden">
+        👁 You are spectating this game — sit back and watch the battle unfold.
       </div>
 
       <div id="phase-banner" class="phase-banner hidden"></div>
@@ -129,9 +128,23 @@
           <div id="players-list" class="players-list"></div>
         </div>
       </div>
+
+      <!-- Chat panel (players only) -->
+      <div id="chat-panel" class="chat-panel hidden">
+        <div class="chat-header">
+          <h3>💬 Game Chat</h3>
+        </div>
+        <div id="chat-messages" class="chat-messages">
+          <p class="empty">No messages yet.</p>
+        </div>
+        <div class="chat-input-row">
+          <input id="chat-input" type="text" placeholder="Say something..." maxlength="300" autocomplete="off" />
+          <button id="btn-chat-send" class="primary small">Send</button>
+        </div>
+      </div>
     </section>
 
-    <!-- ============================ LEADERBOARD MODAL ============================ -->
+    <!-- LEADERBOARD MODAL -->
     <div id="leaderboard-modal" class="modal hidden">
       <div class="modal-content">
         <div class="modal-header">
@@ -142,7 +155,18 @@
       </div>
     </div>
 
-    <!-- ============================ POST-GAME / WIN MODAL ============================ -->
+    <!-- PROFILE MODAL -->
+    <div id="profile-modal" class="modal hidden">
+      <div class="modal-content profile-modal">
+        <div class="modal-header">
+          <h2 id="profile-username">Player</h2>
+          <button id="btn-close-profile" class="ghost">✕</button>
+        </div>
+        <div id="profile-body"><p class="empty">Loading...</p></div>
+      </div>
+    </div>
+
+    <!-- POST-GAME MODAL -->
     <div id="win-modal" class="modal hidden">
       <div class="modal-content win-modal">
 
@@ -161,8 +185,31 @@
           <div id="postgame-lifetime" class="stats-grid-4"></div>
         </div>
 
-        <div class="postgame-actions">
-          <button id="btn-win-close" class="primary">Back to Lobby</button>
+        <!-- Rematch section -->
+        <div id="rematch-section" class="rematch-section">
+          <div id="rematch-requester-view">
+            <button id="btn-rematch-request" class="primary full">⚔️ Request Rematch</button>
+          </div>
+          <div id="rematch-pending-view" class="hidden">
+            <p class="rematch-status-text">⏳ Rematch request sent. Waiting for opponent...</p>
+          </div>
+          <div id="rematch-incoming-view" class="hidden">
+            <p class="rematch-status-text">⚔️ Your opponent wants a rematch!</p>
+            <div class="rematch-btn-row">
+              <button id="btn-rematch-accept" class="primary">Accept</button>
+              <button id="btn-rematch-decline" class="ghost">Decline</button>
+            </div>
+          </div>
+          <div id="rematch-declined-view" class="hidden">
+            <p class="rematch-status-text rematch-declined">They passed on the rematch. Good game.</p>
+          </div>
+          <div id="rematch-accepted-view" class="hidden">
+            <p class="rematch-status-text rematch-accepted">✅ Rematch accepted! Heading into battle...</p>
+          </div>
+        </div>
+
+        <div class="postgame-actions" style="margin-top:12px">
+          <button id="btn-win-close" class="ghost full">Back to Lobby</button>
         </div>
 
       </div>
@@ -171,7 +218,6 @@
   </main>
 
   <div id="toast-container"></div>
-
   <script src="app.js"></script>
 </body>
 </html>

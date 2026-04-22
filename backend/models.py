@@ -26,6 +26,9 @@ class Player(db.Model):
         accuracy = 0.0
         if self.total_shots > 0:
             accuracy = round(self.total_hits / self.total_shots, 4)
+        win_rate = 0.0
+        if self.games_played > 0:
+            win_rate = round(self.wins / self.games_played, 4)
         return {
             "player_id":    self.player_id,
             "playerId":     self.player_id,
@@ -49,6 +52,7 @@ class Player(db.Model):
             "hits":         self.total_hits,
             "totalHits":    self.total_hits,
             "accuracy":     accuracy,
+            "win_rate":     win_rate,
         }
 
 
@@ -67,8 +71,9 @@ class Game(db.Model):
         "GamePlayer", back_populates="game", lazy=True,
         order_by="GamePlayer.turn_order",
     )
-    ships  = db.relationship("Ship", back_populates="game", lazy=True)
-    moves  = db.relationship("Move", back_populates="game", lazy=True, order_by="Move.id")
+    ships    = db.relationship("Ship", back_populates="game", lazy=True)
+    moves    = db.relationship("Move", back_populates="game", lazy=True, order_by="Move.id")
+    messages = db.relationship("ChatMessage", back_populates="game", lazy=True, order_by="ChatMessage.id")
 
     def _current_turn_player_id(self):
         if self.status not in ("active", "playing"):
@@ -85,8 +90,6 @@ class Game(db.Model):
 
         players_detail = []
         for gp in self.game_players:
-            # A "ship" here is one Ship row (which may represent a multi-cell vessel).
-            # is_sunk = True means all cells of that vessel are hit.
             remaining = sum(1 for s in self.ships
                             if s.player_id == gp.player_id and not s.is_sunk)
             players_detail.append({
@@ -94,87 +97,67 @@ class Game(db.Model):
                 "ships_remaining": remaining,
             })
 
-        status         = self.status
-        display_status = status
-
+        status = self.status
         return {
-            "game_id":               self.id,
-            "id":                    self.id,
-            "gameId":                self.id,
-            "grid_size":             self.grid_size,
-            "gridSize":              self.grid_size,
-            "status":                display_status,
-            "waiting":               status in ("waiting_setup",),
-            "waiting_setup":         status in ("waiting_setup",),
-            "playing":               status in ("active",),
-            "active":                status in ("active",),
-            "players":               players_detail,
+            "game_id":                self.id,
+            "id":                     self.id,
+            "gameId":                 self.id,
+            "grid_size":              self.grid_size,
+            "gridSize":               self.grid_size,
+            "status":                 status,
+            "waiting":                status in ("waiting_setup",),
+            "waiting_setup":          status in ("waiting_setup",),
+            "playing":                status in ("active",),
+            "active":                 status in ("active",),
+            "players":                players_detail,
             "current_turn_player_id": self._current_turn_player_id(),
-            "total_moves":           total_moves,
-            "totalMoves":            total_moves,
-            "max_players":           self.max_players,
-            "maxPlayers":            self.max_players,
-            "current_turn_index":    self.current_turn_index,
-            "active_players":        active_count,
-            "player_ids":            player_ids,
-            "playerIds":             player_ids,
-            "winner_id":             self.winner_id,
-            "winnerId":              self.winner_id,
-            "created_at":            self.created_at,
-            "createdAt":             self.created_at,
+            "total_moves":            total_moves,
+            "totalMoves":             total_moves,
+            "max_players":            self.max_players,
+            "maxPlayers":             self.max_players,
+            "current_turn_index":     self.current_turn_index,
+            "active_players":         active_count,
+            "player_ids":             player_ids,
+            "playerIds":              player_ids,
+            "winner_id":              self.winner_id,
+            "winnerId":               self.winner_id,
+            "created_at":             self.created_at,
+            "createdAt":              self.created_at,
         }
 
 
 class GamePlayer(db.Model):
     __tablename__ = "game_players"
 
-    game_id        = db.Column(db.Integer, db.ForeignKey("games.id"), primary_key=True)
-    player_id      = db.Column(db.Integer, db.ForeignKey("players.player_id"), primary_key=True)
-    turn_order     = db.Column(db.Integer, nullable=False)
-    is_eliminated  = db.Column(db.Boolean, nullable=False, default=False)
-    ships_placed   = db.Column(db.Boolean, nullable=False, default=False)
+    game_id       = db.Column(db.Integer, db.ForeignKey("games.id"), primary_key=True)
+    player_id     = db.Column(db.Integer, db.ForeignKey("players.player_id"), primary_key=True)
+    turn_order    = db.Column(db.Integer, nullable=False)
+    is_eliminated = db.Column(db.Boolean, nullable=False, default=False)
+    ships_placed  = db.Column(db.Boolean, nullable=False, default=False)
 
     game   = db.relationship("Game", back_populates="game_players")
     player = db.relationship("Player", back_populates="game_players")
 
 
 class Ship(db.Model):
-    """
-    One row per VESSEL (not per cell).
-
-    Cells occupied:
-      horizontal: (start_row, start_col) .. (start_row, start_col + length - 1)
-      vertical:   (start_row, start_col) .. (start_row + length - 1, start_col)
-
-    hit_mask is a bitmask stored as an integer.
-      bit N = 1  →  cell N of this ship has been hit.
-    When hit_mask == (2**length - 1) every cell is hit → is_sunk = True.
-
-    Legacy single-cell ships (length=1, orientation='H') still work fine.
-    """
     __tablename__ = "ships"
 
     id          = db.Column(db.Integer, primary_key=True)
     game_id     = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=False)
     player_id   = db.Column(db.Integer, db.ForeignKey("players.player_id"), nullable=False)
-
-    # Multi-cell fields
     start_row   = db.Column(db.Integer, nullable=False, default=0)
     start_col   = db.Column(db.Integer, nullable=False, default=0)
     length      = db.Column(db.Integer, nullable=False, default=1)
-    orientation = db.Column(db.String(1), nullable=False, default="H")  # "H" or "V"
+    orientation = db.Column(db.String(1), nullable=False, default="H")
     ship_type   = db.Column(db.String(20), nullable=False, default="submarine")
     hit_mask    = db.Column(db.Integer, nullable=False, default=0)
     is_sunk     = db.Column(db.Boolean, nullable=False, default=False)
-
-    # Keep legacy row/col columns pointing to start cell for backwards compat
-    row = db.Column(db.Integer, nullable=False, default=0)
-    col = db.Column(db.Integer, nullable=False, default=0)
+    row         = db.Column(db.Integer, nullable=False, default=0)
+    col         = db.Column(db.Integer, nullable=False, default=0)
 
     game = db.relationship("Game", back_populates="ships")
 
     def cells(self):
-        """Return list of (row, col) tuples this ship occupies."""
         result = []
         for i in range(self.length):
             if self.orientation == "H":
@@ -184,10 +167,6 @@ class Ship(db.Model):
         return result
 
     def hit_cell(self, row, col):
-        """
-        Mark a cell as hit. Returns True if this shot hit this ship,
-        False if it missed. Also updates is_sunk.
-        """
         for i, (r, c) in enumerate(self.cells()):
             if r == row and c == col:
                 self.hit_mask = self.hit_mask | (1 << i)
@@ -216,13 +195,13 @@ class Ship(db.Model):
 class Move(db.Model):
     __tablename__ = "moves"
 
-    id         = db.Column(db.Integer, primary_key=True)
-    game_id    = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=False)
-    player_id  = db.Column(db.Integer, db.ForeignKey("players.player_id"), nullable=False)
-    row        = db.Column(db.Integer, nullable=False)
-    col        = db.Column(db.Integer, nullable=False)
-    result     = db.Column(db.String(10), nullable=False)
-    timestamp  = db.Column(db.String(30), nullable=False, default=_now)
+    id        = db.Column(db.Integer, primary_key=True)
+    game_id   = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=False)
+    player_id = db.Column(db.Integer, db.ForeignKey("players.player_id"), nullable=False)
+    row       = db.Column(db.Integer, nullable=False)
+    col       = db.Column(db.Integer, nullable=False)
+    result    = db.Column(db.String(10), nullable=False)
+    timestamp = db.Column(db.String(30), nullable=False, default=_now)
 
     game = db.relationship("Game", back_populates="moves")
 
@@ -236,4 +215,51 @@ class Move(db.Model):
             "col":         self.col,
             "result":      self.result,
             "timestamp":   self.timestamp,
+        }
+
+
+class ChatMessage(db.Model):
+    __tablename__ = "chat_messages"
+
+    id        = db.Column(db.Integer, primary_key=True)
+    game_id   = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=False)
+    player_id = db.Column(db.Integer, db.ForeignKey("players.player_id"), nullable=False)
+    message   = db.Column(db.String(300), nullable=False)
+    timestamp = db.Column(db.String(30), nullable=False, default=_now)
+
+    game = db.relationship("Game", back_populates="messages")
+
+    def to_dict(self):
+        player = db.session.get(Player, self.player_id)
+        return {
+            "id":        self.id,
+            "game_id":   self.game_id,
+            "player_id": self.player_id,
+            "username":  player.username if player else f"Player {self.player_id}",
+            "message":   self.message,
+            "timestamp": self.timestamp,
+        }
+
+
+class RematchRequest(db.Model):
+    __tablename__ = "rematch_requests"
+
+    id              = db.Column(db.Integer, primary_key=True)
+    original_game_id = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=False)
+    requester_id    = db.Column(db.Integer, db.ForeignKey("players.player_id"), nullable=False)
+    opponent_id     = db.Column(db.Integer, db.ForeignKey("players.player_id"), nullable=False)
+    # status: pending, accepted, declined
+    status          = db.Column(db.String(20), nullable=False, default="pending")
+    new_game_id     = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=True)
+    created_at      = db.Column(db.String(30), nullable=False, default=_now)
+
+    def to_dict(self):
+        return {
+            "id":               self.id,
+            "original_game_id": self.original_game_id,
+            "requester_id":     self.requester_id,
+            "opponent_id":      self.opponent_id,
+            "status":           self.status,
+            "new_game_id":      self.new_game_id,
+            "created_at":       self.created_at,
         }
