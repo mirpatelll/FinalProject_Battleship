@@ -45,10 +45,7 @@ def restart_game(game_id):
 
     Ship.query.filter_by(game_id=game_id).delete()
     Move.query.filter_by(game_id=game_id).delete()
-
-    for gp in GamePlayer.query.filter_by(game_id=game_id).all():
-        gp.is_eliminated = False
-        gp.ships_placed = False
+    GamePlayer.query.filter_by(game_id=game_id).delete()
 
     game.status = "waiting_setup"
     game.current_turn_index = 0

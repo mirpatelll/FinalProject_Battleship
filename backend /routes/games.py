@@ -29,8 +29,17 @@ def _pid(data):
 @games_bp.route("/games", methods=["POST"])
 def create_game():
     data        = request.get_json(silent=True) or {}
-    grid_size   = data.get("grid_size") or data.get("gridSize") or Config.DEFAULT_GRID_SIZE
-    max_players = data.get("max_players") or data.get("maxPlayers") or 2
+
+    # All three fields are required
+    if "creator_id" not in data and "creatorId" not in data:
+        return jsonify({"error": "bad_request", "message": "creator_id is required"}), 400
+    if "grid_size" not in data and "gridSize" not in data:
+        return jsonify({"error": "bad_request", "message": "grid_size is required"}), 400
+    if "max_players" not in data and "maxPlayers" not in data:
+        return jsonify({"error": "bad_request", "message": "max_players is required"}), 400
+
+    grid_size   = data.get("grid_size") if data.get("grid_size") is not None else data.get("gridSize")
+    max_players = data.get("max_players") if data.get("max_players") is not None else data.get("maxPlayers")
 
     try:
         grid_size = int(grid_size)
@@ -48,14 +57,13 @@ def create_game():
     if max_players < 2 or max_players > 10:
         return jsonify({"error": "bad_request", "message": "max_players must be between 2 and 10"}), 400
 
-    creator_id = data.get("creator_id") or data.get("creatorId")
-    if creator_id is not None:
-        try:
-            creator_id = int(creator_id)
-        except (ValueError, TypeError):
-            creator_id = None
+    creator_id = data.get("creator_id") if data.get("creator_id") is not None else data.get("creatorId")
+    try:
+        creator_id = int(creator_id)
+    except (ValueError, TypeError):
+        return jsonify({"error": "bad_request", "message": "creator_id must be an integer"}), 400
 
-    if creator_id and not db.session.get(Player, creator_id):
+    if not db.session.get(Player, creator_id):
         return jsonify({"error": "not_found", "message": "Creator not found"}), 404
 
     game = Game(grid_size=grid_size, max_players=max_players, status="waiting_setup")
