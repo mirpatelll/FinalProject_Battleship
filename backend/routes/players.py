@@ -38,8 +38,7 @@ def create_player():
 
     existing = Player.query.filter_by(username=username).first()
     if existing:
-        return jsonify({"error": "conflict",
-                        "message": "Username already exists"}), 409
+        return jsonify(existing.stats_dict()), 200
 
     player = Player(username=username)
     db.session.add(player)

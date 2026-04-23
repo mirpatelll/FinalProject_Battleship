@@ -290,7 +290,7 @@ def fire(game_id):
 
     if not (0 <= row < game.grid_size and 0 <= col < game.grid_size):
         return jsonify({"error": "bad_request", "message": "Coordinates out of bounds."}), 400
-    if Move.query.filter_by(game_id=game_id, row=row, col=col).first():
+    if Move.query.filter_by(game_id=game_id, player_id=player_id, row=row, col=col).first():
         return jsonify({"error": "conflict", "message": "Cell already targeted."}), 409
 
     enemy_ships = Ship.query.filter(Ship.game_id == game_id, Ship.player_id != player_id, Ship.is_sunk == False).all()
