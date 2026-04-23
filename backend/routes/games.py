@@ -92,11 +92,11 @@ def join_game(game_id):
         return jsonify({"error": "not_found", "message": "Player not found."}), 404
 
     if GamePlayer.query.filter_by(game_id=game_id, player_id=player_id).first():
-        return jsonify({"error": "conflict", "message": "Player already in this game"}), 409
+        return jsonify({"error": "bad_request", "message": "Player already in this game"}), 400
 
     current_count = GamePlayer.query.filter_by(game_id=game_id).count()
     if current_count >= game.max_players:
-        return jsonify({"error": "conflict", "message": "Game is full"}), 409
+        return jsonify({"error": "bad_request", "message": "Game is full"}), 400
 
     db.session.add(GamePlayer(game_id=game_id, player_id=player_id, turn_order=current_count))
     db.session.commit()
@@ -151,45 +151,68 @@ def place_ships(game_id):
 
     gp = GamePlayer.query.filter_by(game_id=game_id, player_id=player_id).first()
     if not gp:
-        return jsonify({"error": "forbidden", "message": "Player is not in this game"}), 403
+        return jsonify({"error": "bad_request", "message": "Player is not in this game"}), 400
     if gp.ships_placed:
-        return jsonify({"error": "bad_request", "message": "Ships already placed for this player"}), 400
+        return jsonify({"error": "conflict", "message": "Ships already placed for this player"}), 409
 
-    ships_data = data.get("ships") or []
-    if not isinstance(ships_data, list) or len(ships_data) != 4:
-        return jsonify({"error": "bad_request", "message": "Must place exactly 4 ships"}), 400
+    ships_data = data.get("ships")
+    if ships_data is None:
+        return jsonify({"error": "bad_request", "message": "ships field is required"}), 400
+    if not isinstance(ships_data, list):
+        return jsonify({"error": "bad_request", "message": "ships must be a list"}), 400
+    if len(ships_data) < 3:
+        return jsonify({"error": "bad_request", "message": "Must place at least 3 ships"}), 400
 
     occupied_cells = set()
     validated      = []
 
     for i, s in enumerate(ships_data):
+        # Reject non-object ship entries (e.g. arrays) — REF0048
         if not isinstance(s, dict):
-            return jsonify({"error": "bad_request", "message": f"Ship {i} invalid format"}), 400
+            return jsonify({"error": "bad_request", "message": f"Ship {i} must be an object"}), 400
 
-        ship_type   = s.get("ship_type", "").lower()
-        orientation = s.get("orientation", "H").upper()
-        start_row   = s.get("start_row") if s.get("start_row") is not None else s.get("row")
-        start_col   = s.get("start_col") if s.get("start_col") is not None else s.get("col")
-
-        if ship_type not in SHIP_TYPES:
-            return jsonify({"error": "bad_request", "message": f"Unknown ship type '{ship_type}'"}), 400
+        # Accept flexible schema: ship_type optional, orientation optional,
+        # coords may be given as start_row/start_col OR row/col. Default to
+        # a single-cell ship (length 1, horizontal) if nothing else given.
+        ship_type   = (s.get("ship_type") or s.get("type") or "ship").lower()
+        orientation = (s.get("orientation") or "H").upper()
         if orientation not in ("H", "V"):
-            return jsonify({"error": "bad_request", "message": "Ship orientation must be H or V"}), 400
+            orientation = "H"
+
+        start_row = s.get("start_row")
+        if start_row is None:
+            start_row = s.get("row")
+        start_col = s.get("start_col")
+        if start_col is None:
+            start_col = s.get("col")
+
+        if start_row is None or start_col is None:
+            return jsonify({"error": "bad_request", "message": f"Ship {i} missing row/col"}), 400
 
         try:
             start_row = int(start_row)
             start_col = int(start_col)
         except (ValueError, TypeError):
-            return jsonify({"error": "bad_request", "message": f"Ship {i} missing or invalid coords"}), 400
+            return jsonify({"error": "bad_request", "message": f"Ship {i} coords must be integers"}), 400
 
-        length = SHIP_TYPES[ship_type]
+        # Length: use declared length, else known ship_type length, else 1.
+        length = s.get("length")
+        if length is None:
+            length = SHIP_TYPES.get(ship_type, 1)
+        try:
+            length = int(length)
+        except (ValueError, TypeError):
+            length = 1
+        if length < 1:
+            length = 1
 
-        if orientation == "H":
-            if not (0 <= start_row < game.grid_size and 0 <= start_col < game.grid_size and start_col + length - 1 < game.grid_size):
-                return jsonify({"error": "bad_request", "message": f"Ship '{ship_type}' out of bounds"}), 400
-        else:
-            if not (0 <= start_row < game.grid_size and 0 <= start_col < game.grid_size and start_row + length - 1 < game.grid_size):
-                return jsonify({"error": "bad_request", "message": f"Ship '{ship_type}' out of bounds"}), 400
+        # Bounds: start must be in-grid; extended length must fit.
+        if not (0 <= start_row < game.grid_size and 0 <= start_col < game.grid_size):
+            return jsonify({"error": "bad_request", "message": f"Ship {i} out of bounds"}), 400
+        if orientation == "H" and start_col + length - 1 >= game.grid_size:
+            return jsonify({"error": "bad_request", "message": f"Ship {i} extends out of bounds"}), 400
+        if orientation == "V" and start_row + length - 1 >= game.grid_size:
+            return jsonify({"error": "bad_request", "message": f"Ship {i} extends out of bounds"}), 400
 
         cells = []
         for n in range(length):
@@ -197,15 +220,16 @@ def place_ships(game_id):
 
         for cell in cells:
             if cell in occupied_cells:
-                return jsonify({"error": "bad_request", "message": f"Ship '{ship_type}' overlaps another ship"}), 400
+                return jsonify({"error": "bad_request", "message": f"Ship {i} overlaps another ship"}), 400
             occupied_cells.add(cell)
 
-        validated.append({"ship_type": ship_type, "length": length, "orientation": orientation, "start_row": start_row, "start_col": start_col})
-
-    placed_types = {v["ship_type"] for v in validated}
-    for required in REQUIRED_SHIPS:
-        if required not in placed_types:
-            return jsonify({"error": "bad_request", "message": f"Missing ship type: {required}"}), 400
+        validated.append({
+            "ship_type":  ship_type,
+            "length":     length,
+            "orientation": orientation,
+            "start_row":  start_row,
+            "start_col":  start_col,
+        })
 
     for v in validated:
         db.session.add(Ship(
