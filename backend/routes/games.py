@@ -82,7 +82,7 @@ def join_game(game_id):
     if not game:
         return jsonify({"error": "not_found", "message": "Game not found"}), 404
     if game.status not in ("waiting_setup", "placing"):
-        return jsonify({"error": "conflict", "message": "Game already started or finished"}), 409
+        return jsonify({"error": "bad_request", "message": "Game already started or finished"}), 400
 
     player_id = _pid(data)
     if not player_id:
@@ -242,7 +242,7 @@ def place_ships(game_id):
     gp.ships_placed = True
     all_gps = GamePlayer.query.filter_by(game_id=game_id).all()
     if len(all_gps) >= 2 and all(g.ships_placed for g in all_gps):
-        game.status             = "active"
+        game.status             = "playing"
         game.current_turn_index = 0
 
     db.session.commit()
@@ -260,7 +260,7 @@ def fire(game_id):
         return jsonify({"error": "not_found", "message": "Game does not exist"}), 404
     if game.status == "finished":
         return jsonify({"error": "bad_request", "message": "Game is already finished."}), 400
-    if game.status not in ("active", "playing"):
+    if game.status not in ("playing", "active"):
         return jsonify({"error": "forbidden", "message": "Game is not active."}), 403
 
     player_id = _pid(data)
@@ -290,7 +290,7 @@ def fire(game_id):
 
     if not (0 <= row < game.grid_size and 0 <= col < game.grid_size):
         return jsonify({"error": "bad_request", "message": "Coordinates out of bounds."}), 400
-    if Move.query.filter_by(game_id=game_id, player_id=player_id, row=row, col=col).first():
+    if Move.query.filter_by(game_id=game_id, row=row, col=col).first():
         return jsonify({"error": "conflict", "message": "Cell already targeted."}), 409
 
     enemy_ships = Ship.query.filter(Ship.game_id == game_id, Ship.player_id != player_id, Ship.is_sunk == False).all()
@@ -343,7 +343,7 @@ def fire(game_id):
         "ship_type": hit_ship.ship_type if hit_ship else None,
         "next_player_id": next_player_id, "nextPlayerId": next_player_id,
         "game_status": game.status, "status": game.status,
-        "playing": game.status == "active", "active": game.status == "active",
+        "playing": game.status == "playing", "active": game.status == "playing",
     }
     if game.status == "finished":
         response["winner_id"] = game.winner_id

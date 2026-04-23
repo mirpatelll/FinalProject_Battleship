@@ -122,7 +122,7 @@ def test_place_ships(game_id):
 
     all_gps = GamePlayer.query.filter_by(game_id=game_id).all()
     if len(all_gps) >= 2 and all(g.ships_placed for g in all_gps):
-        game.status = "active"
+        game.status = "playing"
         game.current_turn_index = 0
 
     db.session.commit()

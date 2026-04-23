@@ -181,7 +181,7 @@ function renderGamesList() {
     const inGame      = (g.player_ids || []).includes(myId);
     const playerCount = (g.player_ids || []).length;
     const canJoin     = !inGame && (g.status === "waiting_setup" || g.status === "placing") && playerCount < g.max_players;
-    const canSpectate = !inGame && g.status === "active";
+    const canSpectate = !inGame && (g.status === "playing" || g.status === "active");
     const btnLabel    = inGame ? "Resume" : (canJoin ? "Join" : (canSpectate ? "Watch" : "View"));
     const btnDisabled = !inGame && !canJoin && !canSpectate;
     const otherNames  = (g.player_ids || []).filter(id => id !== myId).map(id => getUsername(id)).join(", ");
@@ -296,7 +296,7 @@ async function refreshGame() {
     state.currentGame = game; state.moves = moves;
     await Promise.all((game.player_ids||[]).map(id => resolveUsername(id)));
     renderGameView();
-    if (game.status === "active" || game.status === "placing") pollChat();
+    if ((game.status === "playing" || game.status === "active") || game.status === "placing") pollChat();
     if (game.status === "finished" && !wasFinished) {
       try { const freshMe = await api.getPlayer(state.player.player_id); state.player = { ...state.player, ...freshMe }; } catch (_) {}
       showPostGameModal(game);
@@ -309,7 +309,7 @@ function renderSpectatorView(game) {
   const statusEl = document.getElementById("game-status-label");
   statusEl.className = `status-pill status-${game.status}`; statusEl.textContent = game.status.replace("_"," ");
   const turnEl = document.getElementById("turn-label"); turnEl.classList.remove("my-turn");
-  if (game.status === "active") turnEl.textContent = `${getUsername(game.current_turn_player_id)}'s turn`;
+  if ((game.status === "playing" || game.status === "active")) turnEl.textContent = `${getUsername(game.current_turn_player_id)}'s turn`;
   else turnEl.textContent = game.status === "finished" ? "Game over" : game.status;
   const players = game.players || [];
   if (players.length < 2) return;
@@ -332,14 +332,14 @@ function renderGameView() {
   const statusEl = document.getElementById("game-status-label");
   statusEl.className = `status-pill status-${g.status}`; statusEl.textContent = g.status.replace("_"," ");
   const turnEl = document.getElementById("turn-label"); turnEl.classList.remove("my-turn");
-  if (g.status === "active") {
+  if ((g.status === "playing" || g.status === "active")) {
     if (g.current_turn_player_id === state.player.player_id) { turnEl.textContent = "🎯 Your turn"; turnEl.classList.add("my-turn"); }
     else turnEl.textContent = `Waiting for ${getUsername(g.current_turn_player_id)}...`;
   } else if (g.status === "finished") { turnEl.textContent = "Game over"; }
   else if (g.status === "placing")    { turnEl.textContent = "Place your ships"; }
   else { turnEl.textContent = `Waiting (${(g.player_ids||[]).length}/${g.max_players})`; }
   const inGame = (g.player_ids||[]).includes(state.player.player_id);
-  if (inGame && (g.status === "active" || g.status === "placing" || g.status === "finished")) {
+  if (inGame && ((g.status === "playing" || g.status === "active") || g.status === "placing" || g.status === "finished")) {
     document.getElementById("chat-panel").classList.remove("hidden");
   }
   renderPhaseBanner(g); renderMyBoard(g); renderOpponentBoard(g);
@@ -498,7 +498,7 @@ function renderOpponentBoard(g) {
   document.getElementById("opp-title").textContent = opponents.length>1 ? `Targeting ${oppName}` : `${oppName}'s Board`;
   const cells = makeBoardGrid(boardEl, g.grid_size);
   state.moves.filter(m => m.player_id === myId).forEach(m => { if (!cells[m.row]?.[m.col]) return; cells[m.row][m.col].classList.add(m.result==="hit"?"hit":"miss"); });
-  if (g.status === "active" && g.current_turn_player_id === myId) {
+  if ((g.status === "playing" || g.status === "active") && g.current_turn_player_id === myId) {
     cells.forEach(row => row.forEach(cell => {
       if (cell.classList.contains("hit")||cell.classList.contains("miss")) return;
       cell.classList.add("clickable");

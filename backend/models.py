@@ -76,7 +76,7 @@ class Game(db.Model):
     messages = db.relationship("ChatMessage", back_populates="game", lazy=True, order_by="ChatMessage.id")
 
     def _current_turn_player_id(self):
-        if self.status not in ("active", "playing"):
+        if self.status not in ("playing", "active"):
             return None
         active = [gp for gp in self.game_players if not gp.is_eliminated]
         if not active:
@@ -107,8 +107,8 @@ class Game(db.Model):
             "status":                 status,
             "waiting":                status in ("waiting_setup",),
             "waiting_setup":          status in ("waiting_setup",),
-            "playing":                status in ("active",),
-            "active":                 status in ("active",),
+            "playing":                status in ("playing", "active"),
+            "active":                 status in ("playing", "active"),
             "players":                players_detail,
             "current_turn_player_id": self._current_turn_player_id(),
             "total_moves":            total_moves,
