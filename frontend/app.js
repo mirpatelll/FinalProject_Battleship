@@ -71,7 +71,11 @@ function updateServerStatusDisplay() {
 function showServerSwitcher() {
   document.getElementById("server-switcher-collapsed")?.classList.add("hidden");
   document.getElementById("server-switcher-expanded")?.classList.remove("hidden");
-  setTimeout(() => document.getElementById("server-input-login")?.focus(), 0);
+  const input = document.getElementById("server-input-login");
+  if (input) {
+    input.value = "";  // start clean each time, no stale browser autofill
+    setTimeout(() => input.focus(), 0);
+  }
 }
 
 function hideServerSwitcher() {

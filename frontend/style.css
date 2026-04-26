@@ -756,9 +756,14 @@ button {
 }
 .server-status {
   margin: 0 0 10px 0;
-  font-size: 12px;
+  padding: 8px 10px;
+  font-size: 11px;
   color: var(--text-secondary, #a8b3c1);
   text-align: center;
+  background: rgba(74, 222, 128, 0.05);
+  border-radius: 6px;
+  word-break: break-all;
+  line-height: 1.4;
 }
 .server-status::before {
   content: "● ";
@@ -767,7 +772,7 @@ button {
 .server-status.server-status-away {
   color: var(--gold, #d4a843);
   font-weight: 600;
-  word-break: break-all;
+  background: rgba(212, 168, 67, 0.1);
 }
 .server-status.server-status-away::before {
   color: var(--gold, #d4a843);
@@ -783,32 +788,33 @@ button {
   margin-bottom: 6px;
 }
 
-.server-switch {
-  display: flex;
-  gap: 6px;
-  align-items: stretch;
-  width: 100%;
-}
 .server-input {
-  flex: 1;
+  display: block;
+  width: 100%;
   background: var(--panel-bg, #1a2330);
   color: var(--text-primary, #e8eef5);
   border: 1px solid var(--border, #2a3645);
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   font-size: 13px;
   font-family: inherit;
   outline: none;
   transition: border-color 0.15s;
-  min-width: 0;
+  box-sizing: border-box;
 }
 .server-input:hover, .server-input:focus { border-color: var(--gold, #d4a843); }
+
+.server-use-btn {
+  margin-top: 10px;
+  width: 100%;
+}
 
 .server-switcher-actions {
   display: flex;
   gap: 6px;
   margin-top: 10px;
   justify-content: space-between;
+  flex-wrap: wrap;
 }
 .server-switcher-actions button { flex: 0 0 auto; }
 .server-switcher small {
