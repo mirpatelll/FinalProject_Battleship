@@ -14,6 +14,7 @@
       <span class="brand-text">BATTLESHIP</span>
     </div>
     <div class="user-info">
+      <select class="server-select topbar-server-select" title="Switch server"></select>
       <span id="user-label"></span>
       <button id="btn-leaderboard" class="ghost">Leaderboard</button>
       <button class="btn-theme ghost" title="Switch to light mode">☀️</button>
@@ -33,6 +34,13 @@
         <div class="login-logo">⚓</div>
         <h1>BATTLESHIP</h1>
         <p class="tagline">Sink or be sunk.</p>
+
+        <div class="login-field">
+          <label for="server-select-login">Server</label>
+          <select id="server-select-login" class="server-select"></select>
+          <small>Defaults to our server (0x02). Switch to test interoperability with any team's backend.</small>
+        </div>
+
         <div class="login-field">
           <label for="username-input">Callsign</label>
           <input id="username-input" type="text" placeholder="Enter your callsign"
@@ -40,6 +48,19 @@
         </div>
         <button id="btn-login" class="primary full">Continue</button>
         <p class="login-sub">New callsign? We'll create your account. Returning? You'll be signed right in.</p>
+
+        <details class="grader-info">
+          <summary>📋 How to grade this app</summary>
+          <ol>
+            <li><strong>Sign in</strong> with any callsign (letters, numbers, underscores). New names auto-register.</li>
+            <li><strong>Server defaults</strong> to ours (0x02). To test cross-team play, switch with the dropdown above; the page will reload to that server.</li>
+            <li><strong>Create or join</strong> a game from the lobby. Grid size 5-15, max players 2-10.</li>
+            <li><strong>Place your ships</strong> (4 ships: submarine, destroyer, cruiser, battleship) by clicking cells.</li>
+            <li><strong>Fire</strong> by clicking your opponent's board on your turn. Hit/miss/sunk shown in real time.</li>
+            <li><strong>Note:</strong> our server is on Render free tier — first request after idle may take ~30s to wake up.</li>
+            <li>Light/dark mode toggle is at the top right.</li>
+          </ol>
+        </details>
       </div>
     </section>
 

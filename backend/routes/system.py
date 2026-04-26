@@ -115,7 +115,14 @@ def test_place_ships(game_id):
         if not (0 <= row < game.grid_size and 0 <= col < game.grid_size):
             return jsonify({"error": "bad_request",
                             "message": f"({row},{col}) out of bounds"}), 400
-        db.session.add(Ship(game_id=game_id, player_id=player_id, row=row, col=col))
+        db.session.add(Ship(
+            game_id=game_id, player_id=player_id,
+            row=row, col=col,
+            start_row=row, start_col=col,
+            length=1, orientation="H",
+            ship_type="submarine",
+            hit_mask=0, is_sunk=False,
+        ))
         placed.append({"row": row, "col": col})
 
     gp.ships_placed = True

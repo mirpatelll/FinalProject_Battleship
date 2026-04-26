@@ -744,3 +744,51 @@ button {
   opacity: 0.6;
 }
 .win-x-btn:hover { opacity: 1; }
+/* ============================================================
+   SERVER SELECTOR + GRADER INFO
+   ============================================================ */
+.server-select {
+  background: var(--panel-bg, #1a2330);
+  color: var(--text-primary, #e8eef5);
+  border: 1px solid var(--border, #2a3645);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.server-select:hover, .server-select:focus { border-color: var(--gold, #d4a843); }
+
+.topbar-server-select {
+  max-width: 220px;
+  text-overflow: ellipsis;
+  margin-right: 8px;
+}
+
+#server-select-login { width: 100%; padding: 10px 12px; font-size: 14px; }
+
+.grader-info {
+  margin-top: 18px;
+  padding: 12px 14px;
+  background: rgba(212, 168, 67, 0.08);
+  border: 1px solid rgba(212, 168, 67, 0.3);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.grader-info summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--gold, #d4a843);
+  user-select: none;
+}
+.grader-info summary:hover { opacity: 0.8; }
+.grader-info ol {
+  margin: 10px 0 0 0;
+  padding-left: 22px;
+  line-height: 1.6;
+  color: var(--text-secondary, #a8b3c1);
+}
+.grader-info li { margin-bottom: 4px; }
+.grader-info strong { color: var(--text-primary, #e8eef5); }
